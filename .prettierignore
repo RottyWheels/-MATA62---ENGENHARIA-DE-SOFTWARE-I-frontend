@@ -1,0 +1,7 @@
+dist
+coverage
+pnpm-lock.yaml
+src/shared/api/generated
+playwright-report
+test-results
+public/mockServiceWorker.js

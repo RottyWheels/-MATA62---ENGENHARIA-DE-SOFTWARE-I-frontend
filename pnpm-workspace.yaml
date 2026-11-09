@@ -1,0 +1,4 @@
+# Scripts de instalação permitidos (pnpm bloqueia por padrão).
+allowBuilds:
+  esbuild: true
+  core-js-pure: false
