@@ -1,0 +1,6 @@
+export * from './cep'
+export * from './cpf'
+export * from './digits'
+export * from './oab'
+export * from './phone'
+export * from './uf'
