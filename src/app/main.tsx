@@ -2,9 +2,12 @@ import '../index.css'
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { RouterProvider } from 'react-router'
 
-import { App } from './App'
+import { refreshCsrf } from '@/features/auth'
+
 import { Providers } from './providers'
+import { router } from './router'
 
 async function enableMocks() {
   if (!import.meta.env.DEV || import.meta.env.VITE_ENABLE_MOCKS !== 'true') return
@@ -14,6 +17,8 @@ async function enableMocks() {
 
 async function bootstrap() {
   await enableMocks()
+  // O cookie XSRF-TOKEN precisa existir antes do primeiro POST.
+  await refreshCsrf()
 
   const root = document.getElementById('root')
   if (!root) throw new Error('Elemento #root não encontrado')
@@ -21,7 +26,7 @@ async function bootstrap() {
   createRoot(root).render(
     <StrictMode>
       <Providers>
-        <App />
+        <RouterProvider router={router} />
       </Providers>
     </StrictMode>,
   )
