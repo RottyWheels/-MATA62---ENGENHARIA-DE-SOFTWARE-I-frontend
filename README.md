@@ -6,7 +6,7 @@ Este repositório contém **a base do frontend**: ambiente, ferramentas e infrae
 
 Requisitos, ADRs e táticas arquiteturais estão em [`iuryyxd/MATA62-Veridt`](https://github.com/iuryyxd/MATA62-Veridt). As telas finais vêm do [Figma do Veridt](https://www.figma.com/design/D4vDhuk1DBAJY9knexl7Hs/Veridt?node-id=0-1); o tema foi centralizado em `src/index.css` para facilitar a troca.
 
-> **Estado atual:** somente a configuração do ambiente. Rotas, layouts, telas e o fluxo de autenticação ainda **não** foram criados (ver [Próximos passos](#próximos-passos)).
+> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação de senha e logout) funcionando contra os mocks. As telas de créditos, captura e registros são placeholders (ver [Rotas](#rotas) e [Próximos passos](#próximos-passos)).
 
 ## Stack
 
@@ -14,7 +14,7 @@ Requisitos, ADRs e táticas arquiteturais estão em [`iuryyxd/MATA62-Veridt`](ht
 | ----------------------- | ----------------------------------------------------------------------- |
 | Runtime / gerenciador   | Node 24 LTS, pnpm 12 (via Corepack)                                     |
 | Build                   | Vite 8 + React 19 + TypeScript 6 (`strict`, `noUncheckedIndexedAccess`) |
-| Rotas                   | React Router 8 (modo data, `createBrowserRouter`) — _a configurar_      |
+| Rotas                   | React Router 8 (modo data, `createBrowserRouter`, `lazy`)               |
 | Estado do servidor      | TanStack Query 5 (+ Devtools em dev)                                    |
 | HTTP                    | Axios                                                                   |
 | Cliente da API          | orval (Axios + hooks TanStack Query)                                    |
@@ -60,7 +60,37 @@ O Vite (porta 5173) faz proxy de `/api`, `/ws` (WebSocket) e `/v3/api-docs` para
 
 ### Sem o backend (mocks)
 
-No `.env`, defina `VITE_ENABLE_MOCKS=true` e rode `pnpm dev`. O MSW intercepta as chamadas no navegador. Os handlers ficam em `src/mocks/handlers/` e são os mesmos usados pelo Vitest. Por enquanto a lista de handlers está vazia: os de autenticação entram junto com o fluxo de login.
+No `.env`, defina `VITE_ENABLE_MOCKS=true` e rode `pnpm dev`. O MSW intercepta as chamadas no navegador. Os handlers ficam em `src/mocks/handlers/` e são os mesmos usados pelo Vitest. Hoje cobrem todos os endpoints de autenticação, com usuários em memória: cadastrar → entrar → `/me` → sair funciona sem backend.
+
+Há um usuário de demonstração já cadastrado (definido em `src/mocks/handlers/auth.ts`):
+
+| E-mail             | Senha            |
+| ------------------ | ---------------- |
+| `demo@veridt.test` | `senha-demo-123` |
+
+Os dados dos mocks ficam só na memória da página: ao recarregar, os cadastros feitos somem e volta apenas o usuário de demonstração.
+
+## Rotas
+
+| Rota                               | Tela                                 | Acesso      | Estado                          |
+| ---------------------------------- | ------------------------------------ | ----------- | ------------------------------- |
+| `/login`                           | Login                                | pública     | pronta                          |
+| `/cadastro`                        | Cadastro (advogado ou usuário comum) | pública     | pronta                          |
+| `/recuperar-senha`                 | Solicitar recuperação de senha       | pública     | pronta                          |
+| `/`                                | Redireciona para `/registros`        | autenticada | pronta                          |
+| `/creditos`                        | Pacotes de créditos                  | autenticada | placeholder                     |
+| `/creditos/checkout/:pacoteId`     | Faturamento e pagamento              | autenticada | placeholder                     |
+| `/creditos/pagamento/:pagamentoId` | Status do pagamento / Pix            | autenticada | placeholder                     |
+| `/capturas/nova`                   | Novo registro                        | autenticada | placeholder                     |
+| `/capturas/:id/sessao`             | Navegador remoto ao vivo             | autenticada | esqueleto (`RemoteBrowserView`) |
+| `/registros`                       | Lista de registros                   | autenticada | placeholder com tabela vazia    |
+| `/registros/:id`                   | Detalhes, relatório e ZIP            | autenticada | placeholder                     |
+| `*`                                | 404                                  | —           | pronta                          |
+
+- As rotas autenticadas ficam sob o `RequireAuth`, que consulta `GET /api/me`. Sem sessão (401), ele redireciona para `/login?redirect=<rota>`.
+- As rotas públicas ficam sob o `RedirectIfAuthenticated`: quem já está logado vai para `/` (ou para o `?redirect=`, aceito só se for um caminho interno).
+- Layouts e páginas são carregados sob demanda (`lazy`), um chunk por tela.
+- Ao iniciar, o app chama `GET /api/auth/csrf`, e repete após login e logout, porque o Spring troca o token.
 
 ### Variáveis de ambiente
 
@@ -103,8 +133,8 @@ pnpm exec playwright install chromium   # só na primeira vez
 pnpm e2e
 ```
 
-- **Vitest** (`jsdom`): setup em `src/test/setup.ts` com `@testing-library/jest-dom` e o servidor MSW (`onUnhandledFrame: 'error'`). Cobre os validadores (CPF, CEP, telefone, OAB/UF), a formatação, o `applyProblemDetailToForm` e o interceptor HTTP.
-- **Playwright**: `e2e/smoke.spec.ts` sobe o app com `VITE_ENABLE_MOCKS=true` e confere que ele carrega.
+- **Vitest** (`jsdom`): setup em `src/test/setup.ts` com `@testing-library/jest-dom` e o servidor MSW (`onUnhandledFrame: 'error'`). Cobre os validadores (CPF, CEP, telefone, OAB/UF), a formatação, o `applyProblemDetailToForm`, o interceptor HTTP, o formulário de cadastro (a OAB só aparece e só é exigida para advogado; o corpo enviado à API), o login (incluindo o bloqueio de _open redirect_), o `RequireAuth` e o parser do protocolo da captura. Como o jsdom não implementa `ResizeObserver` nem as APIs de ponteiro usadas pelo Radix, o setup define stubs mínimos.
+- **Playwright**: `e2e/smoke.spec.ts` sobe o app com `VITE_ENABLE_MOCKS=true` e testa dois cenários: rota protegida sem sessão → login com `redirect`; e cadastrar → entrar → layout autenticado (com o saldo de créditos e o storage vazio) → sair.
 
 ## Docker
 
@@ -148,10 +178,23 @@ networks:
 ```
 src/
   app/
-    main.tsx              # bootstrap: MSW (opcional em dev), providers
+    main.tsx              # bootstrap: MSW (opcional em dev), CSRF, providers, router
     providers.tsx         # Theme, QueryClientProvider, Toaster, Devtools
-    App.tsx               # tela provisória (será trocada pelo router)
-  features/               # (a criar) auth, credits, capture, records
+    routes.tsx            # definição das rotas (lazy por feature)
+    router.tsx            # createBrowserRouter + redirecionamento em 401
+    layouts/              # PublicLayout, AppLayout (sidebar + saldo + menu)
+    pages/                # 404 e erro de rota
+  features/
+    auth/                 # módulo identity (REQ 01–04)
+      api/                # endpoints.ts, types.ts, auth.ts (hooks no formato do orval)
+      components/         # RequireAuth, RedirectIfAuthenticated, AuthCard
+      lib/                # safeRedirect
+      pages/              # Login, Cadastro, Recuperar senha (+ testes)
+      schemas/            # schemas Zod
+      index.ts            # API pública da feature
+    credits/              # módulo credits (REQ 05–07): placeholders
+    capture/              # módulo capture (REQ 08–11): RemoteBrowserView, useCaptureSocket, types
+    records/              # módulo records (REQ 12–15): tabela (TanStack Table) e placeholders
   shared/
     api/
       http.ts             # instância Axios, interceptores, customInstance (orval)
@@ -160,7 +203,9 @@ src/
       generated/          # saída do orval (commitada)
     components/
       ui/                 # componentes shadcn/ui
-      theme/              # ThemeProvider (classe `dark` no <html>)
+      form/               # FormTextField, MaskedInput (react-imask), FormError
+      page/               # PageHeader, PagePlaceholder
+      theme/              # ThemeProvider, ThemeToggle (classe `dark` no <html>)
     lib/
       utils.ts            # cn()
       format.ts           # data, moeda (BRL), tamanho de arquivo
@@ -169,7 +214,9 @@ src/
     browser.ts            # setupWorker
     server.ts             # setupServer (Vitest)
     handlers/             # handlers MSW por feature
-  test/setup.ts
+  test/
+    setup.ts              # jest-dom, MSW, stubs do jsdom
+    render.tsx            # renderRoutes(): memory router + QueryClient
 e2e/smoke.spec.ts
 ```
 
@@ -190,6 +237,9 @@ Registradas porque a especificação original conflitava com as versões atuais 
 9. **CSP:** além de `'self'`, o `connect-src`, o `img-src` e o `frame-src` liberam os domínios do Mercado Pago. O SDK carregado de `sdk.mercadopago.com` faz chamadas para `api.mercadopago.com` e abre iframes; só com `'self'` o checkout não funcionaria.
 10. **Interceptor 401:** ignora `/api/me` e `/api/auth/*`, onde o 401 é esperado e tratado pela tela (sem sessão ou credenciais inválidas). Nos demais endpoints, limpa o cache e redireciona para `/login?redirect=<rota>`.
 11. **pnpm:** os scripts de instalação só rodam para os pacotes liberados em `pnpm-workspace.yaml` (`allowBuilds`).
+12. **Redirecionamento após o login:** quem navega é só o `RedirectIfAuthenticated`, ao ver o usuário na query `['me']`. A tela de login não navega por conta própria: duas navegações concorrentes faziam o app parar em `/` sem conteúdo. Pelo mesmo motivo, `/` → `/registros` é um `loader` com `redirect()`, e não um `<Navigate>`.
+13. **Zod 4 e a OAB:** o `superRefine` do cadastro usa `when: () => true`. Sem isso, o Zod 4 só roda a validação condicional (OAB, confirmação de senha) depois que todos os outros campos estão válidos.
+14. **Cookie CSRF nos mocks:** o handler de `/api/auth/csrf` grava o cookie direto em `document.cookie`. Com um `Set-Cookie` na resposta simulada, o MSW guardaria o cookie no `localStorage`.
 
 ## Pendências a combinar com o backend
 
@@ -205,10 +255,8 @@ Registradas porque a especificação original conflitava com as versões atuais 
 
 ## Próximos passos
 
-Ainda não implementado nesta base:
-
-- `src/app/router.tsx` com as rotas (`/login`, `/cadastro`, `/recuperar-senha`, `/creditos/*`, `/capturas/*`, `/registros/*`, 404), `RequireAuth` e lazy loading por feature.
-- Layouts `PublicLayout` e `AppLayout` (sidebar, saldo de créditos, menu do usuário).
-- Feature `auth`: endpoints escritos à mão, schemas Zod, formulários e handlers MSW.
-- Placeholders de `credits`, `capture` (com `RemoteBrowserView` e `useCaptureSocket`) e `records`.
-- Smoke E2E completo: cadastrar → logar → layout → sair.
+- Confirmar o contrato de autenticação com o backend (pendências acima) e, quando houver OpenAPI, trocar `features/auth/api/` pelo cliente gerado pelo orval.
+- Telas de créditos (REQ 05–07): pacotes, faturamento (CEP, telefone e endereço; os validadores já estão em `shared/lib/validators`) e pagamento com Mercado Pago ou Pix.
+- Telas de captura (REQ 08–11): formulário de novo registro e ligação do `RemoteBrowserView` ao protocolo definitivo.
+- Telas de registros (REQ 12–15): listagem real, detalhes, relatório e download do ZIP.
+- Aplicar o visual do Figma trocando os tokens em `src/index.css`.
