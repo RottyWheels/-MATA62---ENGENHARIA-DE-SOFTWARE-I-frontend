@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
@@ -21,14 +21,14 @@ describe('RegisterPage', () => {
   it('mostra o campo OAB só para advogado', async () => {
     const { user } = renderRegister()
 
-    expect(screen.getByRole('radio', { name: 'Usuário comum' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Usuário Comum' })).toBeChecked()
     expect(screen.queryByLabelText('Número da OAB')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('radio', { name: 'Advogado' }))
     expect(screen.getByLabelText('Número da OAB')).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'UF' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Número da OAB')).toHaveAttribute('placeholder', '000000/UF')
 
-    await user.click(screen.getByRole('radio', { name: 'Usuário comum' }))
+    await user.click(screen.getByRole('radio', { name: 'Usuário Comum' }))
     expect(screen.queryByLabelText('Número da OAB')).not.toBeInTheDocument()
   })
 
@@ -36,12 +36,21 @@ describe('RegisterPage', () => {
     const { user } = renderRegister()
 
     await user.click(screen.getByRole('radio', { name: 'Advogado' }))
-    await user.click(screen.getByRole('button', { name: 'Cadastrar' }))
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
 
     expect(await screen.findByText('Informe o número da OAB.')).toBeInTheDocument()
-    expect(screen.getByText('Selecione a UF da OAB.')).toBeInTheDocument()
     expect(screen.getByText('Informe o nome completo.')).toBeInTheDocument()
     expect(screen.getByLabelText('Número da OAB')).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('valida o formato da OAB (número/UF)', async () => {
+    const { user } = renderRegister()
+
+    await user.click(screen.getByRole('radio', { name: 'Advogado' }))
+    await user.type(screen.getByLabelText('Número da OAB'), '12345/XX')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+
+    expect(await screen.findByText('Use o formato número/UF, ex.: 12345/BA.')).toBeInTheDocument()
   })
 
   it('não exige OAB de usuário comum e aplica máscara e validação do CPF', async () => {
@@ -51,7 +60,7 @@ describe('RegisterPage', () => {
     await user.type(cpf, '52998224724')
     expect(cpf).toHaveValue('529.982.247-24')
 
-    await user.click(screen.getByRole('button', { name: 'Cadastrar' }))
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
     expect(await screen.findByText('CPF inválido.')).toBeInTheDocument()
     expect(screen.queryByText('Informe o número da OAB.')).not.toBeInTheDocument()
   })
@@ -79,12 +88,10 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText('Nome completo'), 'Ana  Souza')
     await user.type(screen.getByLabelText('E-mail'), 'ANA@x.test')
     await user.type(screen.getByLabelText('CPF'), '52998224725')
-    await user.type(screen.getByLabelText('Número da OAB'), '12345')
-    await user.click(screen.getByRole('combobox', { name: 'UF' }))
-    await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'BA' }))
+    await user.type(screen.getByLabelText('Número da OAB'), '12345/ba')
     await user.type(screen.getByLabelText('Senha'), 'senha-segura')
     await user.type(screen.getByLabelText('Confirmar senha'), 'senha-segura')
-    await user.click(screen.getByRole('button', { name: 'Cadastrar' }))
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
 
     expect(await screen.findByText('tela de login')).toBeInTheDocument()
     expect(body).toEqual({
@@ -119,7 +126,7 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText('CPF'), '52998224725')
     await user.type(screen.getByLabelText('Senha'), 'senha-segura')
     await user.type(screen.getByLabelText('Confirmar senha'), 'senha-segura')
-    await user.click(screen.getByRole('button', { name: 'Cadastrar' }))
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
 
     expect(await screen.findByText('E-mail já cadastrado.')).toBeInTheDocument()
     expect(screen.getByText('Verifique os dados informados.')).toBeInTheDocument()
