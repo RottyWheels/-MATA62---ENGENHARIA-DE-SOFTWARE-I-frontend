@@ -6,7 +6,7 @@ Este repositório contém **a base do frontend**: ambiente, ferramentas e infrae
 
 Requisitos, ADRs e táticas arquiteturais estão em [`iuryyxd/MATA62-Veridt`](https://github.com/iuryyxd/MATA62-Veridt). As telas finais vêm do [Figma do Veridt](https://www.figma.com/design/D4vDhuk1DBAJY9knexl7Hs/Veridt?node-id=0-1); o tema foi centralizado em `src/index.css` para facilitar a troca.
 
-> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação de senha e logout) funcionando contra os mocks. As telas de créditos, captura e registros são placeholders (ver [Rotas](#rotas) e [Próximos passos](#próximos-passos)).
+> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação de senha e logout) funcionando contra os mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). As telas de créditos, captura e registros são placeholders (ver [Rotas](#rotas) e [Próximos passos](#próximos-passos)).
 
 ## Stack
 
@@ -27,6 +27,19 @@ Requisitos, ADRs e táticas arquiteturais estão em [`iuryyxd/MATA62-Veridt`](ht
 | Mocks                   | MSW 3                                                                   |
 | Testes                  | Vitest 5 + Testing Library + jsdom · Playwright                         |
 | Qualidade               | ESLint 10 (flat config, `typescript-eslint`, `react-hooks`) + Prettier  |
+
+## Design (Figma)
+
+O visual foi aplicado a partir da visualização do [Figma do Veridt](https://www.figma.com/design/D4vDhuk1DBAJY9knexl7Hs/Veridt?node-id=0-1):
+
+- **Tokens** em `src/index.css`: cor principal `#0F7C69` (`--brand`), barra lateral verde, raio `0.5rem`. O Figma só define o modo claro, que é o padrão; o modo escuro continua suportado pela classe `dark` no `<html>`, com tokens derivados da marca.
+- **Telas públicas** (`PublicLayout`): painel verde com logo e ilustração à esquerda e formulário à direita; no celular, só o formulário.
+- **Login**: "Acesse sua conta", senha com botão de mostrar/ocultar, "Esqueci a senha". Foi acrescentado o link "Criar conta", que não aparece no Figma, para a tela de cadastro continuar acessível.
+- **Cadastro**: abas "Usuário Comum | Advogado", CPF e "Número da OAB" lado a lado, OAB num campo único no formato `000000/UF` (validado contra as 27 UFs).
+- **Área logada** (`AppLayout`): barra lateral verde sem cabeçalho, com "Novo Registro", "Lista dos Registros" e "Comprar Créditos"; no rodapé, inicial do nome, nome, "Créditos: N" e "Sair da conta". No celular, a barra vira um `sheet` aberto por uma faixa verde no topo.
+- **Páginas**: título grande e subtítulo verde (`PageHeader`); a listagem usa as colunas do Figma (Status, Data/hora início, Data/hora fim, Ações).
+
+**Limitação:** o conector do Figma exige acesso de edição ao arquivo, e a conta conectada só tem visualização. Por isso cores, tamanhos e textos foram lidos de capturas de tela, não das variáveis do arquivo, e a fonte continua a Geist (a do Figma não pôde ser confirmada). Com acesso de edição, confira os tokens de `src/index.css` com as variáveis do Figma.
 
 ## Pré-requisitos
 
@@ -133,7 +146,7 @@ pnpm exec playwright install chromium   # só na primeira vez
 pnpm e2e
 ```
 
-- **Vitest** (`jsdom`): setup em `src/test/setup.ts` com `@testing-library/jest-dom` e o servidor MSW (`onUnhandledFrame: 'error'`). Cobre os validadores (CPF, CEP, telefone, OAB/UF), a formatação, o `applyProblemDetailToForm`, o interceptor HTTP, o formulário de cadastro (a OAB só aparece e só é exigida para advogado; o corpo enviado à API), o login (incluindo o bloqueio de _open redirect_), o `RequireAuth` e o parser do protocolo da captura. Como o jsdom não implementa `ResizeObserver` nem as APIs de ponteiro usadas pelo Radix, o setup define stubs mínimos.
+- **Vitest** (`jsdom`): setup em `src/test/setup.ts` com `@testing-library/jest-dom` e o servidor MSW (`onUnhandledFrame: 'error'`). Cobre os validadores (CPF, CEP, telefone, OAB/UF), a formatação, o `applyProblemDetailToForm`, o interceptor HTTP, o formulário de cadastro (a OAB só aparece e só é exigida para advogado; o formato `número/UF`; o corpo enviado à API), o login (incluindo o bloqueio de _open redirect_), o `RequireAuth` e o parser do protocolo da captura. Como o jsdom não implementa `ResizeObserver` nem as APIs de ponteiro usadas pelo Radix, o setup define stubs mínimos.
 - **Playwright**: `e2e/smoke.spec.ts` sobe o app com `VITE_ENABLE_MOCKS=true` e testa dois cenários: rota protegida sem sessão → login com `redirect`; e cadastrar → entrar → layout autenticado (com o saldo de créditos e o storage vazio) → sair.
 
 ## Docker
@@ -240,6 +253,8 @@ Registradas porque a especificação original conflitava com as versões atuais 
 12. **Redirecionamento após o login:** quem navega é só o `RedirectIfAuthenticated`, ao ver o usuário na query `['me']`. A tela de login não navega por conta própria: duas navegações concorrentes faziam o app parar em `/` sem conteúdo. Pelo mesmo motivo, `/` → `/registros` é um `loader` com `redirect()`, e não um `<Navigate>`.
 13. **Zod 4 e a OAB:** o `superRefine` do cadastro usa `when: () => true`. Sem isso, o Zod 4 só roda a validação condicional (OAB, confirmação de senha) depois que todos os outros campos estão válidos.
 14. **Cookie CSRF nos mocks:** o handler de `/api/auth/csrf` grava o cookie direto em `document.cookie`. Com um `Set-Cookie` na resposta simulada, o MSW guardaria o cookie no `localStorage`.
+15. **OAB em campo único:** a especificação previa número + seletor de UF; o Figma usa um campo `000000/UF`. Segue o Figma; o valor é validado (até 6 dígitos + uma das 27 UFs) e enviado como `"<numero>/<UF>"`, como antes.
+16. **Falha do MSW não deixa a tela em branco:** se o Service Worker dos mocks não registrar, o app abre mesmo assim e mostra o aviso "Mocks desligados" (detalhes no console). Isso foi observado no navegador embutido do app Claude; em Chrome, Edge ou Firefox normais os mocks funcionam.
 
 ## Pendências a combinar com o backend
 
