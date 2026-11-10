@@ -57,13 +57,13 @@ export const routes: RouteObject[] = [
               {
                 path: 'creditos',
                 lazy: async () => ({
-                  Component: (await import('@/features/credits/pages/CreditsPage')).CreditsPage,
+                  Component: (await import('@/features/credits/pages/PurchasePage')).PurchasePage,
                 }),
               },
               {
                 path: 'creditos/checkout/:pacoteId',
                 lazy: async () => ({
-                  Component: (await import('@/features/credits/pages/CheckoutPage')).CheckoutPage,
+                  Component: (await import('@/features/credits/pages/PurchasePage')).PurchasePage,
                 }),
               },
               {
