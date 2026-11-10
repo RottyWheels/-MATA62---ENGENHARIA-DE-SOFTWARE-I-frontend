@@ -3,6 +3,8 @@ import { delay, http, HttpResponse } from 'msw'
 import type { LoginRequest, PasswordResetRequest, RegisterRequest, User } from '@/features/auth'
 import type { ProblemDetail } from '@/shared/api/problem-detail'
 
+import { problem } from '../utils'
+
 /**
  * Backend de autenticação em memória (contrato provisório da §5.5).
  * O estado some ao recarregar a página — de propósito, nada vai para o storage.
@@ -44,21 +46,25 @@ export function resetAuthMock() {
   seed()
 }
 
-function toUser({ password: _password, cpf: _cpf, ...user }: StoredUser): User {
+function toUser({ password: _password, ...user }: StoredUser): User {
   return user
-}
-
-function problem(status: number, title: string, detail?: string, errors?: ProblemDetail['errors']) {
-  const body: ProblemDetail = { type: 'about:blank', title, status, detail, errors }
-  return HttpResponse.json(body, {
-    status,
-    headers: { 'Content-Type': 'application/problem+json' },
-  })
 }
 
 function currentUser() {
   if (!db.currentUserId) return undefined
   return [...db.users.values()].find((u) => u.id === db.currentUserId)
+}
+
+/** Usuário da sessão simulada (usado pelos mocks de outras features). */
+export function getSessionUser(): User | undefined {
+  const user = currentUser()
+  return user ? toUser(user) : undefined
+}
+
+/** Soma créditos ao saldo de um usuário (confirmação de pagamento simulada). */
+export function addCredits(userId: string, credits: number) {
+  const user = [...db.users.values()].find((u) => u.id === userId)
+  if (user) user.creditBalance += credits
 }
 
 export const authHandlers = [

@@ -11,6 +11,8 @@ export type User = {
   email: string
   type: UserType
   creditBalance: number
+  /** Só dígitos. Pré-preenche o faturamento (Figma). Provisório: confirmar com o backend. */
+  cpf?: string
 }
 
 export type LoginRequest = {
