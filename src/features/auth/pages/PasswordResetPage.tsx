@@ -13,6 +13,7 @@ import { FieldGroup } from '@/shared/components/ui/field'
 
 import { usePasswordReset } from '../api/auth'
 import { AuthCard } from '../components/AuthCard'
+import { authLinkClass } from '../lib/styles'
 import { passwordResetSchema, type PasswordResetFormValues } from '../schemas/auth'
 
 export function PasswordResetPage() {
@@ -35,15 +36,14 @@ export function PasswordResetPage() {
 
   return (
     <AuthCard
-      title="Recuperar senha"
+      title="Esqueci a senha"
       description="Informe o e-mail da sua conta para receber as instruções."
       footer={
-        <Link
-          to="/login"
-          className="font-medium text-foreground underline-offset-4 hover:underline"
-        >
-          Voltar para o login
-        </Link>
+        <p className="text-right">
+          <Link to="/login" className={authLinkClass}>
+            Voltar para o login
+          </Link>
+        </p>
       }
     >
       {passwordReset.isSuccess ? (
@@ -64,9 +64,10 @@ export function PasswordResetPage() {
               label="E-mail"
               type="email"
               autoComplete="email"
+              placeholder="seu@email.com"
               autoFocus
             />
-            <Button type="submit" disabled={form.formState.isSubmitting}>
+            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? 'Enviando…' : 'Enviar instruções'}
             </Button>
           </FieldGroup>

@@ -12,7 +12,8 @@ function readStoredTheme(): Theme {
   } catch {
     // storage indisponível (modo privado etc.)
   }
-  return 'system'
+  // O Figma define só o modo claro: ele é o padrão.
+  return 'light'
 }
 
 function systemPrefersDark() {

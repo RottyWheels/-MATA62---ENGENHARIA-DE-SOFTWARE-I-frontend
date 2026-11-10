@@ -1,9 +1,8 @@
-import { CameraIcon, CoinsIcon, FileTextIcon, type LucideIcon } from 'lucide-react'
+export type NavItem = { to: string; label: string }
 
-export type NavItem = { to: string; label: string; icon: LucideIcon }
-
+/** Ordem e nomes do Figma. */
 export const NAV_ITEMS: NavItem[] = [
-  { to: '/registros', label: 'Registros', icon: FileTextIcon },
-  { to: '/capturas/nova', label: 'Nova captura', icon: CameraIcon },
-  { to: '/creditos', label: 'Créditos', icon: CoinsIcon },
+  { to: '/capturas/nova', label: 'Novo Registro' },
+  { to: '/registros', label: 'Lista dos Registros' },
+  { to: '/creditos', label: 'Comprar Créditos' },
 ]

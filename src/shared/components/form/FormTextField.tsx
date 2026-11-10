@@ -5,6 +5,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/shared/compon
 import { Input } from '@/shared/components/ui/input'
 
 import { MaskedInput, type MaskMask } from './MaskedInput'
+import { PasswordInput } from './PasswordInput'
 
 type FormTextFieldProps<T extends FieldValues> = {
   control: Control<T>
@@ -48,6 +49,8 @@ export function FormTextField<T extends FieldValues>({
       <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
       {mask ? (
         <MaskedInput {...common} mask={mask} value={value} onValueChange={field.onChange} />
+      ) : inputProps.type === 'password' ? (
+        <PasswordInput {...common} value={value} onChange={field.onChange} />
       ) : (
         <Input {...common} value={value} onChange={field.onChange} />
       )}

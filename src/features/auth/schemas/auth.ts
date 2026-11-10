@@ -1,12 +1,6 @@
 import { z } from 'zod'
 
-import {
-  formatOab,
-  isValidCpf,
-  isValidOabNumber,
-  isValidUf,
-  onlyDigits,
-} from '@/shared/lib/validators'
+import { formatOab, isValidCpf, onlyDigits, parseOab } from '@/shared/lib/validators'
 
 import type { RegisterRequest } from '../api/types'
 
@@ -49,9 +43,8 @@ export const registerSchema = z
       .min(PASSWORD_MIN_LENGTH, `A senha deve ter no mínimo ${PASSWORD_MIN_LENGTH} caracteres.`),
     confirmPassword: z.string().min(1, 'Confirme a senha.'),
     cpf: z.string().min(1, 'Informe o CPF.').refine(isValidCpf, 'CPF inválido.'),
-    // OAB: só aparece e só é obrigatória para advogado (validada no superRefine).
-    oabNumero: z.string(),
-    oabUf: z.string(),
+    // OAB no formato `000000/UF` (Figma): só aparece e só é obrigatória para advogado.
+    oab: z.string(),
   })
   .superRefine(
     (data, ctx) => {
@@ -63,17 +56,14 @@ export const registerSchema = z
         })
       }
       if (data.type === 'ADVOGADO') {
-        if (!data.oabNumero.trim()) {
-          ctx.addIssue({ code: 'custom', path: ['oabNumero'], message: 'Informe o número da OAB.' })
-        } else if (!isValidOabNumber(data.oabNumero)) {
+        if (!data.oab.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['oab'], message: 'Informe o número da OAB.' })
+        } else if (!parseOab(data.oab)) {
           ctx.addIssue({
             code: 'custom',
-            path: ['oabNumero'],
-            message: 'Número da OAB inválido (até 6 dígitos).',
+            path: ['oab'],
+            message: 'Use o formato número/UF, ex.: 12345/BA.',
           })
-        }
-        if (!isValidUf(data.oabUf)) {
-          ctx.addIssue({ code: 'custom', path: ['oabUf'], message: 'Selecione a UF da OAB.' })
         }
       }
     },
@@ -90,8 +80,7 @@ export const registerDefaultValues: RegisterFormValues = {
   password: '',
   confirmPassword: '',
   cpf: '',
-  oabNumero: '',
-  oabUf: '',
+  oab: '',
 }
 
 /** Converte o formulário no corpo da API (CPF só com dígitos, OAB como `"<numero>/<UF>"`). */
@@ -103,8 +92,7 @@ export function toRegisterRequest(values: RegisterFormValues): RegisterRequest {
     password: values.password,
     cpf: onlyDigits(values.cpf),
   }
-  if (values.type === 'ADVOGADO' && isValidUf(values.oabUf)) {
-    request.oabNumber = formatOab(values.oabNumero, values.oabUf)
-  }
+  const oab = values.type === 'ADVOGADO' ? parseOab(values.oab) : null
+  if (oab) request.oabNumber = formatOab(oab.numero, oab.uf)
   return request
 }

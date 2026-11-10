@@ -49,77 +49,87 @@
 }
 
 /*
- * Tokens de cor do tema (shadcn/ui, preset Nova).
- * As telas finais virão do Figma: para trocar o tema, altere apenas as variáveis
- * em :root (modo claro) e .dark (modo escuro). Os componentes usam só esses tokens.
+ * Tokens do tema — Figma do Veridt (cor principal #0F7C69).
+ * Os valores foram lidos da visualização pública do arquivo; quando houver acesso
+ * de edição ao Figma, confira-os com as variáveis do arquivo.
+ * Para trocar o tema, altere só as variáveis em :root (claro) e .dark (escuro).
  */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --brand: #0f7c69;
+  --brand-strong: #0b6656;
+  --brand-soft: #e7f3f0;
+
+  --background: #ffffff;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  --primary: var(--brand);
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #111827;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --accent: var(--brand-soft);
+  --accent-foreground: var(--brand-strong);
+  --destructive: #dc2626;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: var(--brand);
+  --chart-1: #0f7c69;
+  --chart-2: #2a9d8f;
+  --chart-3: #66b9ab;
+  --chart-4: #a3d6cc;
+  --chart-5: #0b4f43;
+  --radius: 0.5rem;
+  --sidebar: var(--brand);
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: var(--brand);
+  --sidebar-accent: #ffffff;
+  --sidebar-accent-foreground: var(--brand);
+  --sidebar-border: rgb(255 255 255 / 15%);
+  --sidebar-ring: #ffffff;
 }
 
+/* O Figma só define o modo claro; o escuro mantém a marca com contraste adequado. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --brand: #2fb39a;
+  --brand-strong: #5fd0ba;
+  --brand-soft: #12332d;
+
+  --background: #0b1412;
+  --foreground: #f1f5f4;
+  --card: #111c1a;
+  --card-foreground: #f1f5f4;
+  --popover: #111c1a;
+  --popover-foreground: #f1f5f4;
+  --primary: var(--brand);
+  --primary-foreground: #04120f;
+  --secondary: #1b2826;
+  --secondary-foreground: #f1f5f4;
+  --muted: #1b2826;
+  --muted-foreground: #9fb0ac;
+  --accent: var(--brand-soft);
+  --accent-foreground: var(--brand-strong);
+  --destructive: #f87171;
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 15%);
+  --ring: var(--brand);
+  --chart-1: #2fb39a;
+  --chart-2: #5fd0ba;
+  --chart-3: #8fe0d0;
+  --chart-4: #c2efe6;
+  --chart-5: #12332d;
+  --sidebar: #0a4f43;
+  --sidebar-foreground: #f1f5f4;
+  --sidebar-primary: #f1f5f4;
+  --sidebar-primary-foreground: #0a4f43;
+  --sidebar-accent: #f1f5f4;
+  --sidebar-accent-foreground: #0a4f43;
+  --sidebar-border: rgb(255 255 255 / 12%);
+  --sidebar-ring: #f1f5f4;
 }
 
 @layer base {

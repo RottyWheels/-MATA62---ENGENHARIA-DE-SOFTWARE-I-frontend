@@ -5,10 +5,10 @@ export function NewCapturePage() {
   return (
     <>
       <PageHeader
-        title="Nova captura"
-        description="Informe o endereço do site e o título do registro (captura de tela ou vídeo)."
+        title="Iniciar Registro de Conteúdo"
+        description="Informe o endereço do site e o título do registro."
       />
-      <PagePlaceholder requirement="REQ 08 — Iniciar registro de conteúdo." />
+      <PagePlaceholder requirement="REQ 08: iniciar registro de conteúdo (captura de tela ou vídeo de navegação)." />
     </>
   )
 }

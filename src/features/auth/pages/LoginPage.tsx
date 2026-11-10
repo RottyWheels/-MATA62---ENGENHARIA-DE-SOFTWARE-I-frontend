@@ -12,6 +12,7 @@ import { FieldGroup } from '@/shared/components/ui/field'
 
 import { useLogin } from '../api/auth'
 import { AuthCard } from '../components/AuthCard'
+import { authLinkClass } from '../lib/styles'
 import { loginSchema, type LoginFormValues } from '../schemas/auth'
 
 type LoginLocationState = { email?: string } | null
@@ -44,21 +45,7 @@ export function LoginPage() {
   })
 
   return (
-    <AuthCard
-      title="Entrar"
-      description="Acesse sua conta para registrar e consultar evidências."
-      footer={
-        <p>
-          Ainda não tem conta?{' '}
-          <Link
-            to="/cadastro"
-            className="font-medium text-foreground underline-offset-4 hover:underline"
-          >
-            Cadastre-se
-          </Link>
-        </p>
-      }
-    >
+    <AuthCard title="Acesse sua conta">
       <form onSubmit={onSubmit} noValidate>
         <FieldGroup>
           <FormError message={formError} />
@@ -68,6 +55,7 @@ export function LoginPage() {
             label="E-mail"
             type="email"
             autoComplete="email"
+            placeholder="seu@email.com"
             autoFocus={!initialEmail}
           />
           <FormTextField
@@ -76,19 +64,20 @@ export function LoginPage() {
             label="Senha"
             type="password"
             autoComplete="current-password"
+            placeholder="••••••••••"
             autoFocus={!!initialEmail}
           />
-          <div className="-mt-2 text-right text-sm">
-            <Link
-              to="/recuperar-senha"
-              className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              Esqueci minha senha
-            </Link>
-          </div>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? 'Entrando…' : 'Entrar'}
           </Button>
+          <div className="-mt-2 flex items-center justify-between gap-4 text-sm">
+            <Link to="/cadastro" className={authLinkClass}>
+              Criar conta
+            </Link>
+            <Link to="/recuperar-senha" className={authLinkClass}>
+              Esqueci a senha
+            </Link>
+          </div>
         </FieldGroup>
       </form>
     </AuthCard>

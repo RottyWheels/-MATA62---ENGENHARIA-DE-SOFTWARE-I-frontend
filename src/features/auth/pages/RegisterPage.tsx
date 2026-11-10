@@ -8,26 +8,13 @@ import { applyProblemDetailToForm } from '@/shared/api/problem-detail'
 import { FormError } from '@/shared/components/form/FormError'
 import { FormTextField } from '@/shared/components/form/FormTextField'
 import { Button } from '@/shared/components/ui/button'
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from '@/shared/components/ui/field'
+import { FieldError, FieldGroup, FieldLegend, FieldSet } from '@/shared/components/ui/field'
 import { RadioGroup, RadioGroupItem } from '@/shared/components/ui/radio-group'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/shared/components/ui/select'
-import { CPF_MASK, UFS } from '@/shared/lib/validators'
+import { CPF_MASK } from '@/shared/lib/validators'
 
 import { useRegister } from '../api/auth'
 import { AuthCard } from '../components/AuthCard'
+import { authLinkClass } from '../lib/styles'
 import {
   PASSWORD_MIN_LENGTH,
   registerDefaultValues,
@@ -37,7 +24,7 @@ import {
 } from '../schemas/auth'
 
 const USER_TYPES = [
-  { value: 'COMUM', label: 'Usuário comum' },
+  { value: 'COMUM', label: 'Usuário Comum' },
   { value: 'ADVOGADO', label: 'Advogado' },
 ] as const
 
@@ -57,13 +44,11 @@ export function RegisterPage() {
     setFormError(null)
     try {
       const user = await register.mutateAsync(toRegisterRequest(values))
-      toast.success('Cadastro realizado', { description: 'Entre com seu e-mail e senha.' })
+      toast.success('Conta criada', { description: 'Entre com seu e-mail e senha.' })
       await navigate('/login', { state: { email: user.email } })
     } catch (error) {
       setFormError(
-        applyProblemDetailToForm(error, form.setError, {
-          fieldMap: { oabNumber: 'oabNumero' },
-        }),
+        applyProblemDetailToForm(error, form.setError, { fieldMap: { oabNumber: 'oab' } }),
       )
     }
   })
@@ -71,43 +56,45 @@ export function RegisterPage() {
   return (
     <AuthCard
       title="Criar conta"
-      description="Cadastre-se para comprar créditos e registrar evidências."
+      description="Escolha o tipo de conta e preencha seus dados."
       footer={
-        <p>
-          Já tem conta?{' '}
-          <Link
-            to="/login"
-            className="font-medium text-foreground underline-offset-4 hover:underline"
-          >
-            Entrar
+        <p className="text-right">
+          <Link to="/login" className={authLinkClass}>
+            Já tenho uma conta
           </Link>
         </p>
       }
     >
       <form onSubmit={onSubmit} noValidate>
-        <FieldGroup>
+        <FieldGroup className="gap-5">
           <FormError message={formError} />
 
+          {/* Seletor segmentado (Figma), com semântica de radio para leitores de tela. */}
           <Controller
             control={form.control}
             name="type"
             render={({ field, fieldState }) => (
-              <FieldSet data-invalid={fieldState.invalid || undefined}>
-                <FieldLegend variant="label">Tipo de cadastro</FieldLegend>
+              <FieldSet>
+                <FieldLegend className="sr-only">Tipo de conta</FieldLegend>
                 <RadioGroup
                   name={field.name}
                   value={field.value}
                   onValueChange={field.onChange}
-                  className="grid grid-cols-2 gap-2"
-                  aria-invalid={fieldState.invalid || undefined}
+                  className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
                 >
                   {USER_TYPES.map((option) => (
-                    <FieldLabel key={option.value} htmlFor={`tipo-${option.value}`}>
-                      <Field orientation="horizontal">
-                        <RadioGroupItem value={option.value} id={`tipo-${option.value}`} />
-                        <span>{option.label}</span>
-                      </Field>
-                    </FieldLabel>
+                    <label
+                      key={option.value}
+                      htmlFor={`tipo-${option.value}`}
+                      className="relative flex h-8 cursor-pointer items-center justify-center rounded-md text-sm font-medium text-muted-foreground transition-colors has-focus-visible:ring-3 has-focus-visible:ring-ring/50 has-data-[state=checked]:bg-background has-data-[state=checked]:text-foreground has-data-[state=checked]:shadow-sm"
+                    >
+                      <RadioGroupItem
+                        value={option.value}
+                        id={`tipo-${option.value}`}
+                        className="sr-only"
+                      />
+                      {option.label}
+                    </label>
                   ))}
                 </RadioGroup>
                 <FieldError errors={[fieldState.error]} />
@@ -120,6 +107,7 @@ export function RegisterPage() {
             name="fullName"
             label="Nome completo"
             autoComplete="name"
+            placeholder="Seu nome completo"
           />
           <FormTextField
             control={form.control}
@@ -127,56 +115,29 @@ export function RegisterPage() {
             label="E-mail"
             type="email"
             autoComplete="email"
-          />
-          <FormTextField
-            control={form.control}
-            name="cpf"
-            label="CPF"
-            mask={CPF_MASK}
-            inputMode="numeric"
-            placeholder="000.000.000-00"
+            placeholder="seu@email.com"
           />
 
-          {isLawyer && (
-            <div className="grid grid-cols-[1fr_7rem] items-start gap-3">
+          <div className={isLawyer ? 'grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-3' : undefined}>
+            <FormTextField
+              control={form.control}
+              name="cpf"
+              label="CPF"
+              mask={CPF_MASK}
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+            />
+            {isLawyer && (
               <FormTextField
                 control={form.control}
-                name="oabNumero"
+                name="oab"
                 label="Número da OAB"
-                inputMode="numeric"
-                maxLength={6}
+                placeholder="000000/UF"
+                autoCapitalize="characters"
+                maxLength={9}
               />
-              <Controller
-                control={form.control}
-                name="oabUf"
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid || undefined}>
-                    <FieldLabel htmlFor="campo-oabUf">UF</FieldLabel>
-                    <Select name={field.name} value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger
-                        id="campo-oabUf"
-                        ref={field.ref}
-                        onBlur={field.onBlur}
-                        aria-invalid={fieldState.invalid || undefined}
-                        aria-describedby={fieldState.error ? 'campo-oabUf-erro' : undefined}
-                        className="w-full"
-                      >
-                        <SelectValue placeholder="UF" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {UFS.map((uf) => (
-                          <SelectItem key={uf.sigla} value={uf.sigla}>
-                            {uf.sigla}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FieldError id="campo-oabUf-erro" errors={[fieldState.error]} />
-                  </Field>
-                )}
-              />
-            </div>
-          )}
+            )}
+          </div>
 
           <FormTextField
             control={form.control}
@@ -184,6 +145,7 @@ export function RegisterPage() {
             label="Senha"
             type="password"
             autoComplete="new-password"
+            placeholder="••••••••••"
             description={`Mínimo de ${PASSWORD_MIN_LENGTH} caracteres.`}
           />
           <FormTextField
@@ -192,10 +154,11 @@ export function RegisterPage() {
             label="Confirmar senha"
             type="password"
             autoComplete="new-password"
+            placeholder="••••••••••"
           />
 
-          <Button type="submit" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? 'Cadastrando…' : 'Cadastrar'}
+          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? 'Criando conta…' : 'Criar conta'}
           </Button>
         </FieldGroup>
       </form>
