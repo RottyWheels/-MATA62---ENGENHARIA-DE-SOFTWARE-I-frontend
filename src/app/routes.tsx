@@ -46,6 +46,20 @@ export const routes: RouteObject[] = [
         ],
       },
       {
+        // Fora do <RedirectIfAuthenticated>: o link do e-mail funciona mesmo com sessão aberta.
+        lazy: async () => ({
+          Component: (await import('./layouts/PublicLayout')).PublicLayout,
+        }),
+        children: [
+          {
+            path: 'redefinir-senha',
+            lazy: async () => ({
+              Component: (await import('@/features/auth/pages/NewPasswordPage')).NewPasswordPage,
+            }),
+          },
+        ],
+      },
+      {
         element: <RequireAuth />,
         children: [
           {
