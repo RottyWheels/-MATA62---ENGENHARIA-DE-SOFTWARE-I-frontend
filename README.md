@@ -233,6 +233,14 @@ docker build -t veridt-frontend .
 - envia `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options: DENY` e uma CSP que permite o SDK do Mercado Pago;
 - expõe `GET /healthz` para o healthcheck.
 
+Para testar a imagem com o backend já rodando no Docker, sem mexer no `compose.yaml`, ligue o container na rede do backend (o Compose prefixa o nome da rede com o nome da pasta):
+
+```bash
+docker run -d --name veridt_frontend --network mata62---engenharia-de-software-i_veridt-net -p 8081:80 veridt-frontend
+```
+
+O app fica em `http://localhost:8081`, com a API pelo nginx. Testado com o backend do `desenv` + `GET /api/me`: telas, fallback da SPA, cabeçalhos de segurança, cadastro, login, `/api/me` e logout.
+
 ### Trecho para o `compose.yaml` do backend
 
 Adicione no repositório do backend. O serviço do Spring já se chama `backend` e está na rede `veridt-net`, que é o que o `nginx.conf` espera. O `context` considera os dois repositórios clonados lado a lado na mesma pasta; repare no hífen no início do nome deste repositório:
