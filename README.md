@@ -6,7 +6,7 @@ Este repositório contém **a base do frontend**: ambiente, ferramentas e infrae
 
 Requisitos, ADRs e táticas arquiteturais estão em [`iuryyxd/MATA62-Veridt`](https://github.com/iuryyxd/MATA62-Veridt). As telas finais vêm do [Figma do Veridt](https://www.figma.com/design/D4vDhuk1DBAJY9knexl7Hs/Veridt?node-id=0-1); o tema foi centralizado em `src/index.css` para facilitar a troca.
 
-> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação de senha e logout) funcionando contra os mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) também funciona contra os mocks. As telas de captura e registros ainda são placeholders (ver [Rotas](#rotas) e [Próximos passos](#próximos-passos)).
+> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação e redefinição de senha, logout) ligado ao backend real (branch `desenv`, ver [Integração com o backend](#integração-com-o-backend)) e também aos mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) também funciona contra os mocks. As telas de captura e registros ainda são placeholders (ver [Rotas](#rotas) e [Próximos passos](#próximos-passos)).
 
 ## Stack
 
@@ -46,7 +46,7 @@ O visual foi aplicado a partir da visualização do [Figma do Veridt](https://ww
 Segue o Figma "Compra Créditos" numa única tela (`PurchasePage`), em vez das três etapas separadas da especificação; `/creditos/checkout/:pacoteId` abre a mesma tela com o pacote escolhido.
 
 1. **Escolha do pacote:** Básico, Médio ou Premium, com preço, créditos, valor por crédito e benefícios (Apêndice A), vindos de `GET /api/credits/packages`.
-2. **Dados de faturamento** (Apêndice A): nome, e-mail e CPF vêm da conta (bloqueados, como no Figma); telefone, CEP, endereço, número, complemento, bairro, cidade e estado são validados com os validadores de `shared/lib/validators`. Telefone, CPF e CEP vão à API só com dígitos.
+2. **Dados de faturamento** (Apêndice A): nome e e-mail vêm da conta (bloqueados, como no Figma); o CPF é digitado, porque o backend não o devolve em `GET /api/me`; telefone, CEP, endereço, número, complemento, bairro, cidade e estado são validados com os validadores de `shared/lib/validators`. Telefone, CPF e CEP vão à API só com dígitos.
 3. **Pagamento:**
    - **Pix:** `POST /api/credits/purchases` devolve o QR Code e o código "copia e cola", mostrados no modal "PIX Gerado". O app consulta `GET /api/credits/payments/{id}` a cada 3 s até o status sair de `PENDING`; ao aprovar, atualiza o saldo (query `['me']`).
    - **Mercado Pago:** a resposta traz `checkoutUrl` (o `init_point` do Checkout Pro) e o usuário é levado para lá; o retorno cai em `/creditos/pagamento/{id}`, que acompanha o status.
@@ -54,11 +54,11 @@ Segue o Figma "Compra Créditos" numa única tela (`PurchasePage`), em vez das t
 
 ### Contrato provisório de créditos
 
-| Método | Caminho                      | Corpo                                 | Resposta                          |
-| ------ | ---------------------------- | ------------------------------------- | --------------------------------- |
-| `GET`  | `/api/credits/packages`      | —                                     | 200 `CreditPackage[]`             |
-| `POST` | `/api/credits/purchases`     | `PurchaseRequest` + `Idempotency-Key` | 201 `Payment` / 400 ProblemDetail |
-| `GET`  | `/api/credits/payments/{id}` | —                                     | 200 `Payment` / 404               |
+| Método | Caminho                      | Corpo                                 | Resposta                            |
+| ------ | ---------------------------- | ------------------------------------- | ----------------------------------- |
+| `GET`  | `/api/credits/packages`      | —                                     | 200 `CreditPackage[]`               |
+| `POST` | `/api/credits/purchases`     | `PurchaseRequest` + `Idempotency-Key` | 201 `Payment` / 400 `ErrorResponse` |
+| `GET`  | `/api/credits/payments/{id}` | —                                     | 200 `Payment` / 404                 |
 
 Os tipos estão em `src/features/credits/api/types.ts`. Erros de campo do faturamento podem vir como `billing.<campo>` (ex.: `billing.cep`) e aparecem no campo correspondente.
 
@@ -86,7 +86,10 @@ cp .env.example .env
 
 ### Com o backend
 
-Suba o backend em `http://localhost:8080` e rode:
+Resumo (detalhes em [Integração com o backend](#integração-com-o-backend)):
+
+1. No repositório do backend, use a branch `feature/identity-me` (ou o `desenv`, quando ela for integrada), crie o `.env` a partir do `.env.example` com `RESET_URL=http://localhost:5173/redefinir-senha` e suba tudo com `docker compose up --build`.
+2. No `.env` deste repositório, deixe `VITE_ENABLE_MOCKS=false` e rode:
 
 ```bash
 pnpm dev
@@ -96,7 +99,7 @@ O Vite (porta 5173) faz proxy de `/api`, `/ws` (WebSocket) e `/v3/api-docs` para
 
 ### Sem o backend (mocks)
 
-No `.env`, defina `VITE_ENABLE_MOCKS=true` e rode `pnpm dev`. O MSW intercepta as chamadas no navegador. Os handlers ficam em `src/mocks/handlers/` e são os mesmos usados pelo Vitest. Hoje cobrem todos os endpoints de autenticação, com usuários em memória: cadastrar → entrar → `/me` → sair funciona sem backend.
+No `.env`, defina `VITE_ENABLE_MOCKS=true` e rode `pnpm dev`. O MSW intercepta as chamadas no navegador. Os handlers ficam em `src/mocks/handlers/` e são os mesmos usados pelo Vitest. Os de autenticação imitam o backend real (respostas, códigos de erro e o formato `ErrorResponse`); os de créditos seguem o contrato provisório. Para testar a tela `/redefinir-senha` nos mocks, use `?token=token-de-teste`.
 
 Há um usuário de demonstração já cadastrado (definido em `src/mocks/handlers/auth.ts`):
 
@@ -106,6 +109,48 @@ Há um usuário de demonstração já cadastrado (definido em `src/mocks/handler
 
 Os dados dos mocks ficam só na memória da página: ao recarregar, os cadastros feitos somem e volta apenas o usuário de demonstração.
 
+## Integração com o backend
+
+O frontend segue o backend da branch `desenv` (sprint 1: módulo `identity`, REQ 01–04).
+
+### Como subir
+
+Pré-requisito: Docker Desktop. Não é preciso instalar Java: o `Dockerfile` do backend compila com Maven dentro do container.
+
+```bash
+cd ../MATA62---ENGENHARIA-DE-SOFTWARE-I
+git switch feature/identity-me
+cp .env.example .env
+```
+
+No `.env` do backend, defina `POSTGRES_PASSWORD`, `S3_SECRET_KEY` e `RESET_URL=http://localhost:5173/redefinir-senha`. Depois:
+
+```bash
+docker compose up --build
+```
+
+Com o backend em `http://localhost:8080` e `VITE_ENABLE_MOCKS=false`, rode `pnpm dev` aqui e abra `http://localhost:5173`. Os e-mails de recuperação de senha aparecem no Mailpit, em `http://localhost:8025`.
+
+### Contrato de autenticação
+
+| Método | Caminho                            | Corpo                                                              | Resposta                                   |
+| ------ | ---------------------------------- | ------------------------------------------------------------------ | ------------------------------------------ |
+| `GET`  | `/api/auth/csrf`                   | —                                                                  | 204 + cookie `XSRF-TOKEN`                  |
+| `POST` | `/api/auth/register`               | `fullName`, `email`, `password`, `cpf`, `type`, `oabRegistrations` | 201 `UserResponse` / 400 / 409             |
+| `POST` | `/api/auth/login`                  | `email`, `password`                                                | 204 / 401 `CREDENCIAIS_INVALIDAS`          |
+| `POST` | `/api/auth/logout`                 | —                                                                  | 204                                        |
+| `POST` | `/api/auth/password-reset`         | `email`                                                            | 202 (sempre)                               |
+| `POST` | `/api/auth/password-reset/confirm` | `token`, `newPassword`                                             | 204 / 422 `TOKEN_INVALIDO`                 |
+| `GET`  | `/api/me`                          | —                                                                  | 200 `UserResponse` / 401 `NAO_AUTENTICADO` |
+
+- **`GET /api/me` ainda não está no `desenv`.** Foi escrito na branch `feature/identity-me` do backend (commit local, falta abrir o PR). Sem ele, o app não sabe quem está logado e volta sempre para o login.
+- **Login devolve 204 sem corpo.** Depois dele o app renova o token CSRF (o Spring troca o token ao autenticar) e busca o usuário em `GET /api/me`.
+- **`UserResponse`** traz `id`, `fullName`, `email`, `type`, `oabRegistrations` e `createdAt`. Não traz CPF nem saldo de créditos: a barra lateral mostra "Créditos: —" até o módulo `credits` existir.
+- **OAB:** o campo único `000000/UF` do Figma vira uma inscrição `{ number, state, type: 'PRINCIPAL' }` em `oabRegistrations`.
+- **Senha:** de 8 a 128 caracteres, com letra, número e símbolo (`PasswordPolicy` do backend). O cadastro e a redefinição validam a mesma regra antes de enviar.
+- **Erros:** o backend responde com `ErrorResponse` (`{ timestamp, status, code, message, errors[{ field, message }] }`), não com `ProblemDetail`. O `applyProblemDetailToForm` aceita os dois formatos. Campos de listas (`oabRegistrations[0].number`) são mapeados pelo nome base, e erros sem `errors[]` (409 `EMAIL_JA_CADASTRADO`, `CPF_JA_CADASTRADO`, `OAB_JA_CADASTRADA`) vão para o campo certo pelo `code`.
+- **Créditos, captura e registros** ainda não existem no backend. Com `VITE_ENABLE_MOCKS=false`, a tela de compra mostra erro ao carregar os pacotes.
+
 ## Rotas
 
 | Rota                               | Tela                                               | Acesso      | Estado                          |
@@ -113,6 +158,7 @@ Os dados dos mocks ficam só na memória da página: ao recarregar, os cadastros
 | `/login`                           | Login                                              | pública     | pronta                          |
 | `/cadastro`                        | Cadastro (advogado ou usuário comum)               | pública     | pronta                          |
 | `/recuperar-senha`                 | Solicitar recuperação de senha                     | pública     | pronta                          |
+| `/redefinir-senha?token=`          | Nova senha (link do e-mail do backend)             | pública¹    | pronta                          |
 | `/`                                | Redireciona para `/registros`                      | autenticada | pronta                          |
 | `/creditos`                        | Compra: pacotes, faturamento e pagamento           | autenticada | pronta (mocks)                  |
 | `/creditos/checkout/:pacoteId`     | A mesma tela, com o pacote já escolhido            | autenticada | pronta (mocks)                  |
@@ -123,6 +169,7 @@ Os dados dos mocks ficam só na memória da página: ao recarregar, os cadastros
 | `/registros/:id`                   | Detalhes, relatório e ZIP                          | autenticada | placeholder                     |
 | `*`                                | 404                                                | —           | pronta                          |
 
+- ¹ `/redefinir-senha` abre mesmo com sessão ativa, porque o link chega por e-mail. Redefinir a senha encerra todas as sessões do usuário no backend.
 - As rotas autenticadas ficam sob o `RequireAuth`, que consulta `GET /api/me`. Sem sessão (401), ele redireciona para `/login?redirect=<rota>`.
 - As rotas públicas ficam sob o `RedirectIfAuthenticated`: quem já está logado vai para `/` (ou para o `?redirect=`, aceito só se for um caminho interno).
 - Layouts e páginas são carregados sob demanda (`lazy`), um chunk por tela.
@@ -169,7 +216,7 @@ pnpm exec playwright install chromium   # só na primeira vez
 pnpm e2e
 ```
 
-- **Vitest** (`jsdom`): setup em `src/test/setup.ts` com `@testing-library/jest-dom` e o servidor MSW (`onUnhandledFrame: 'error'`). Cobre os validadores (CPF, CEP, telefone, OAB/UF), a formatação, o `applyProblemDetailToForm`, o interceptor HTTP, o formulário de cadastro (a OAB só aparece e só é exigida para advogado; o formato `número/UF`; o corpo enviado à API), o login (incluindo o bloqueio de _open redirect_), o `RequireAuth`, o parser do protocolo da captura e a compra de créditos (schema de faturamento, pacote pré-escolhido pela URL, Pix com `Idempotency-Key` e aprovação, Mercado Pago, erros do backend e a tela de status). Como o jsdom não implementa `ResizeObserver` nem as APIs de ponteiro usadas pelo Radix, o setup define stubs mínimos.
+- **Vitest** (`jsdom`): setup em `src/test/setup.ts` com `@testing-library/jest-dom` e o servidor MSW (`onUnhandledFrame: 'error'`). Cobre os validadores (CPF, CEP, telefone, OAB/UF), a formatação, o `applyProblemDetailToForm`, o interceptor HTTP, o formulário de cadastro (a OAB só aparece e só é exigida para advogado; o formato `número/UF`; a política de senha; o corpo enviado à API; erros de campo e conflitos 409 do backend), a redefinição de senha pelo link do e-mail, o login (incluindo o bloqueio de _open redirect_), o `RequireAuth`, o parser do protocolo da captura e a compra de créditos (schema de faturamento, pacote pré-escolhido pela URL, Pix com `Idempotency-Key` e aprovação, Mercado Pago, erros do backend e a tela de status). Como o jsdom não implementa `ResizeObserver` nem as APIs de ponteiro usadas pelo Radix, o setup define stubs mínimos.
 - **Playwright** (sobe o app com `VITE_ENABLE_MOCKS=true`): `e2e/smoke.spec.ts` testa rota protegida sem sessão → login com `redirect`, e cadastrar → entrar → layout autenticado (com o saldo e o storage vazio) → sair; `e2e/credits.spec.ts` compra o Pacote Médio com Pix e confere o saldo atualizado.
 
 ## Docker
@@ -281,28 +328,28 @@ Registradas porque a especificação original conflitava com as versões atuais 
 12. **Redirecionamento após o login:** quem navega é só o `RedirectIfAuthenticated`, ao ver o usuário na query `['me']`. A tela de login não navega por conta própria: duas navegações concorrentes faziam o app parar em `/` sem conteúdo. Pelo mesmo motivo, `/` → `/registros` é um `loader` com `redirect()`, e não um `<Navigate>`.
 13. **Zod 4 e a OAB:** o `superRefine` do cadastro usa `when: () => true`. Sem isso, o Zod 4 só roda a validação condicional (OAB, confirmação de senha) depois que todos os outros campos estão válidos.
 14. **Cookie CSRF nos mocks:** o handler de `/api/auth/csrf` grava o cookie direto em `document.cookie`. Com um `Set-Cookie` na resposta simulada, o MSW guardaria o cookie no `localStorage`.
-15. **OAB em campo único:** a especificação previa número + seletor de UF; o Figma usa um campo `000000/UF`. Segue o Figma; o valor é validado (até 6 dígitos + uma das 27 UFs) e enviado como `"<numero>/<UF>"`, como antes.
+15. **OAB em campo único:** a especificação previa número + seletor de UF; o Figma usa um campo `000000/UF`. Segue o Figma; o valor é validado (até 6 dígitos, diferente de zero, + uma das 27 UFs) e enviado como a inscrição principal em `oabRegistrations`. O backend aceita várias inscrições; a tela de cadastro, como o Figma, pede só uma.
 16. **Falha do MSW não deixa a tela em branco:** se o Service Worker dos mocks não registrar, o app abre mesmo assim e mostra o aviso "Mocks desligados" (detalhes no console). Isso foi observado no navegador embutido do app Claude; em Chrome, Edge ou Firefox normais os mocks funcionam.
 17. **Compra numa tela só:** a especificação previa `/creditos` → `/creditos/checkout/:pacoteId` → `/creditos/pagamento/:pagamentoId`; o Figma junta pacotes, faturamento e pagamento numa tela, com o Pix num modal. Segue o Figma; as três rotas continuam existindo.
-18. **`cpf` no `User`:** o Figma mostra o CPF já preenchido no faturamento, então o contrato provisório de `GET /api/me` ganhou `cpf` (opcional). Sem ele, o campo fica editável.
+18. **CPF digitado no faturamento:** o Figma mostra o CPF já preenchido, mas o backend não devolve o CPF em nenhuma resposta, de propósito. O campo fica editável.
 19. **Estado como seletor:** o Figma desenha "Estado" como campo de texto; o app usa um seletor com as 27 UFs, para garantir uma sigla válida.
+20. **Formato de erro do backend:** o tipo `ProblemDetail` do frontend ganhou `code` e `message`, e a mensagem geral passou a ser `message ?? detail ?? title`. O nome do tipo ficou, para não espalhar a mudança; ele descreve o erro da API, seja `ErrorResponse` ou RFC 9457.
 
 ## Pendências a combinar com o backend
 
-1. Adicionar `springdoc-openapi` (linha 3.x, compatível com Spring Boot 4) e expor `/v3/api-docs`.
-2. Prefixar todos os controllers com `/api`.
-3. CSRF para SPA com `http.csrf(csrf -> csrf.spa())`, que configura o `CookieCsrfTokenRepository.withHttpOnlyFalse()` junto com o tratador de token próprio para SPA, e o endpoint `GET /api/auth/csrf`, que força a gravação do cookie `XSRF-TOKEN`. **Atenção:** usar só o `CookieCsrfTokenRepository.withHttpOnlyFalse()` com o tratador padrão (proteção BREACH) faz todo POST do frontend receber 403, porque o Axios envia o valor bruto do cookie. A rota do webhook do Mercado Pago deve ficar fora do CSRF e ter a autenticidade verificada por assinatura.
-4. Login via JSON (`POST /api/auth/login`), retornando 401 em JSON, sem `formLogin`/redirect. Também `GET /api/me` e o _entry point_ retornando 401 em vez de redirect.
-5. Erros de validação em `ProblemDetail` com a lista `errors[{ field, message }]`.
-6. O cookie `SESSION` com `HttpOnly`, `SameSite=Lax` e `Secure` em produção.
-7. Endpoint WebSocket `/ws/capture/{sessionId}` autenticado pela sessão.
-8. O formato do número da OAB (proposta: `"<numero>/<UF>"`).
-9. `server.forward-headers-strategy=native` (ou `framework`) no `application.properties`, para o Spring respeitar o `X-Forwarded-Proto`/`X-Forwarded-For` enviados pelo nginx. Sem isso, o cookie `Secure`, os redirects e o IP registrado na trilha de auditoria saem errados atrás do proxy.
-10. **Créditos:** os endpoints e tipos de "Contrato provisório de créditos"; o pacote e o valor vêm sempre do backend (o frontend não envia preço); suporte a `Idempotency-Key` em `POST /api/credits/purchases`; integração Pix/Checkout Pro do Mercado Pago com `back_urls` apontando para `/creditos/pagamento/{id}`; webhook do Mercado Pago com assinatura verificada e fora do CSRF; `cpf` em `GET /api/me`.
+Já resolvidas no `desenv`: prefixo `/api`, CSRF para SPA (`csrf.spa()` + `GET /api/auth/csrf`), login em JSON com 401 em JSON, erros de validação com `errors[{ field, message }]` e o formato da OAB (`oabRegistrations`).
+
+1. **`GET /api/me`:** integrar a branch `feature/identity-me` (PR a abrir).
+2. Adicionar `springdoc-openapi` (linha 3.x, compatível com Spring Boot 4) e expor `/v3/api-docs`, para gerar o cliente com o orval.
+3. `RESET_URL` apontando para o frontend: o padrão do `compose.yaml` e do `application.properties` é `http://localhost:8080/redefinir-senha`, mas a tela fica no frontend (`http://localhost:5173/redefinir-senha` em dev; em produção, o endereço do nginx).
+4. O cookie `SESSION` com `HttpOnly`, `SameSite=Lax` e `Secure` em produção.
+5. Endpoint WebSocket `/ws/capture/{sessionId}` autenticado pela sessão.
+6. `server.forward-headers-strategy=native` (ou `framework`) no `application.properties`, para o Spring respeitar o `X-Forwarded-Proto`/`X-Forwarded-For` enviados pelo nginx. Sem isso, o cookie `Secure`, os redirects e o IP registrado na trilha de auditoria saem errados atrás do proxy.
+7. **Créditos:** os endpoints e tipos de "Contrato provisório de créditos"; `creditBalance` em `GET /api/me`; o pacote e o valor vêm sempre do backend (o frontend não envia preço); suporte a `Idempotency-Key` em `POST /api/credits/purchases`; integração Pix/Checkout Pro do Mercado Pago com `back_urls` apontando para `/creditos/pagamento/{id}`; webhook do Mercado Pago com assinatura verificada e fora do CSRF.
 
 ## Próximos passos
 
-- Confirmar o contrato de autenticação com o backend (pendências acima) e, quando houver OpenAPI, trocar `features/auth/api/` pelo cliente gerado pelo orval.
+- Abrir o PR do `GET /api/me` no backend e, quando houver OpenAPI, trocar `features/auth/api/` pelo cliente gerado pelo orval.
 - Créditos: ligar ao backend real quando os endpoints existirem e, se o time quiser, preencher o endereço pelo CEP (via backend, para não abrir o `connect-src` da CSP).
 - Telas de captura (REQ 08–11): formulário de novo registro e ligação do `RemoteBrowserView` ao protocolo definitivo.
 - Telas de registros (REQ 12–15): listagem real, detalhes, relatório e download do ZIP.
