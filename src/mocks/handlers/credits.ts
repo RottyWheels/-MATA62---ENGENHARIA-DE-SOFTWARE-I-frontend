@@ -92,14 +92,14 @@ function fakeQrCode(seed: string) {
 export const creditsHandlers = [
   http.get('*/api/credits/packages', async () => {
     await delay(150)
-    if (!getSessionUser()) return problem(401, 'Unauthorized')
+    if (!getSessionUser()) return problem(401, 'NAO_AUTENTICADO', 'Autenticação necessária.')
     return HttpResponse.json(MOCK_PACKAGES)
   }),
 
   http.post('*/api/credits/purchases', async ({ request }) => {
     await delay()
     const user = getSessionUser()
-    if (!user) return problem(401, 'Unauthorized')
+    if (!user) return problem(401, 'NAO_AUTENTICADO', 'Autenticação necessária.')
 
     const idempotencyKey = request.headers.get('Idempotency-Key') ?? ''
     const repeated = [...payments.values()].find((p) => p.idempotencyKey === idempotencyKey)
@@ -108,7 +108,7 @@ export const creditsHandlers = [
     const body = (await request.json()) as PurchaseRequest
     const pkg = MOCK_PACKAGES.find((p) => p.id === body.packageId)
     if (!pkg) {
-      return problem(400, 'Bad Request', 'Pacote inválido.', [
+      return problem(400, 'DADOS_INVALIDOS', 'Pacote inválido.', [
         { field: 'packageId', message: 'Escolha um pacote.' },
       ])
     }
@@ -144,10 +144,10 @@ export const creditsHandlers = [
   http.get('*/api/credits/payments/:id', async ({ params }) => {
     await delay(150)
     const user = getSessionUser()
-    if (!user) return problem(401, 'Unauthorized')
+    if (!user) return problem(401, 'NAO_AUTENTICADO', 'Autenticação necessária.')
     const payment = payments.get(String(params.id))
     if (!payment || payment.userId !== user.id) {
-      return problem(404, 'Not Found', 'Pagamento não encontrado.')
+      return problem(404, 'NAO_ENCONTRADO', 'Pagamento não encontrado.')
     }
     settle(payment)
     return HttpResponse.json(publicPayment(payment))

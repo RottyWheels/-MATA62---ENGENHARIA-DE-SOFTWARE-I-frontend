@@ -86,6 +86,43 @@ describe('applyProblemDetailToForm', () => {
     )
   })
 
+  it('lê o ErrorResponse do backend (code + message)', () => {
+    const setError = vi.fn()
+    const error = axiosErrorWith({
+      timestamp: '2026-11-11T12:00:00Z',
+      status: 400,
+      code: 'DADOS_INVALIDOS',
+      message: 'Dados inválidos.',
+      errors: [{ field: 'oabRegistrations[0].number', message: 'deve ter até 6 dígitos' }],
+    })
+    expect(
+      applyProblemDetailToForm(error, setError, { fieldMap: { oabRegistrations: 'oab' } }),
+    ).toBe('Dados inválidos.')
+    expect(setError).toHaveBeenCalledWith(
+      'oab',
+      { type: 'server', message: 'deve ter até 6 dígitos' },
+      { shouldFocus: true },
+    )
+  })
+
+  it('usa codeMap para levar um erro sem campos (409) a um campo', () => {
+    const setError = vi.fn()
+    const message = applyProblemDetailToForm(
+      axiosErrorWith(
+        { status: 409, code: 'EMAIL_JA_CADASTRADO', message: 'E-mail já cadastrado.', errors: [] },
+        409,
+      ),
+      setError,
+      { codeMap: { EMAIL_JA_CADASTRADO: 'email' } },
+    )
+    expect(message).toBe('E-mail já cadastrado.')
+    expect(setError).toHaveBeenCalledWith(
+      'email',
+      { type: 'server', message: 'E-mail já cadastrado.' },
+      { shouldFocus: true },
+    )
+  })
+
   it('retorna mensagem genérica para erros que não são ProblemDetail', () => {
     const setError = vi.fn()
     expect(applyProblemDetailToForm(new Error('rede'), setError)).toBe(GENERIC_ERROR_MESSAGE)

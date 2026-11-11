@@ -2,16 +2,13 @@ import { HttpResponse } from 'msw'
 
 import type { ProblemDetail } from '@/shared/api/problem-detail'
 
-/** Resposta de erro no formato RFC 9457, como o Spring devolve. */
+/** Resposta de erro no formato do backend (`ErrorResponse`: status, code, message, errors). */
 export function problem(
   status: number,
-  title: string,
-  detail?: string,
-  errors?: ProblemDetail['errors'],
+  code: string,
+  message: string,
+  errors: NonNullable<ProblemDetail['errors']> = [],
 ) {
-  const body: ProblemDetail = { type: 'about:blank', title, status, detail, errors }
-  return HttpResponse.json(body, {
-    status,
-    headers: { 'Content-Type': 'application/problem+json' },
-  })
+  const body: ProblemDetail = { timestamp: new Date().toISOString(), status, code, message, errors }
+  return HttpResponse.json(body, { status })
 }
