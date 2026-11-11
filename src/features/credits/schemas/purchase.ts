@@ -31,14 +31,14 @@ export const purchaseSchema = z.object({
 export type PurchaseFormValues = z.input<typeof purchaseSchema>
 
 export function purchaseDefaultValues(
-  user?: { fullName: string; email: string; cpf?: string },
+  user?: { fullName: string; email: string },
   packageId?: CreditPackageId,
 ): PurchaseFormValues {
   return {
     packageId: packageId as CreditPackageId,
     fullName: user?.fullName ?? '',
     email: user?.email ?? '',
-    cpf: user?.cpf ?? '',
+    cpf: '',
     phone: '',
     cep: '',
     street: '',

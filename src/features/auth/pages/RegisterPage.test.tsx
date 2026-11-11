@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
@@ -65,7 +65,7 @@ describe('RegisterPage', () => {
     expect(screen.queryByText('Informe o número da OAB.')).not.toBeInTheDocument()
   })
 
-  it('envia CPF só com dígitos e OAB como "<numero>/<UF>"', async () => {
+  it('envia CPF só com dígitos e a OAB como inscrição principal', async () => {
     let body: unknown
     server.use(
       http.post('*/api/auth/register', async ({ request }) => {
@@ -76,7 +76,8 @@ describe('RegisterPage', () => {
             fullName: 'Ana Souza',
             email: 'ana@x.test',
             type: 'ADVOGADO',
-            creditBalance: 0,
+            oabRegistrations: [{ number: '12345', state: 'BA', type: 'PRINCIPAL' }],
+            createdAt: '2026-11-11T12:00:00Z',
           },
           { status: 201 },
         )
@@ -89,8 +90,8 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText('E-mail'), 'ANA@x.test')
     await user.type(screen.getByLabelText('CPF'), '52998224725')
     await user.type(screen.getByLabelText('Número da OAB'), '12345/ba')
-    await user.type(screen.getByLabelText('Senha'), 'senha-segura')
-    await user.type(screen.getByLabelText('Confirmar senha'), 'senha-segura')
+    await user.type(screen.getByLabelText('Senha'), 'Senha#Forte1')
+    await user.type(screen.getByLabelText('Confirmar senha'), 'Senha#Forte1')
     await user.click(screen.getByRole('button', { name: 'Criar conta' }))
 
     expect(await screen.findByText('tela de login')).toBeInTheDocument()
@@ -98,38 +99,59 @@ describe('RegisterPage', () => {
       type: 'ADVOGADO',
       fullName: 'Ana Souza',
       email: 'ana@x.test',
-      password: 'senha-segura',
+      password: 'Senha#Forte1',
       cpf: '52998224725',
-      oabNumber: '12345/BA',
+      oabRegistrations: [{ number: '12345', state: 'BA', type: 'PRINCIPAL' }],
     })
   })
 
-  it('mostra os erros do backend (ProblemDetail) nos campos', async () => {
-    const problem: ProblemDetail = {
-      status: 400,
-      title: 'Bad Request',
-      detail: 'Verifique os dados informados.',
-      errors: [{ field: 'email', message: 'E-mail já cadastrado.' }],
-    }
-    server.use(
-      http.post('*/api/auth/register', () =>
-        HttpResponse.json(problem, {
-          status: 400,
-          headers: { 'Content-Type': 'application/problem+json' },
-        }),
-      ),
-    )
+  it('exige letra, número e símbolo na senha, como o backend', async () => {
     const { user } = renderRegister()
 
+    await user.type(screen.getByLabelText('Senha'), 'senhasemnumero')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+
+    expect(await screen.findByText('A senha precisa ter ao menos um número.')).toBeInTheDocument()
+  })
+
+  it('mostra os erros de campo do backend (inclusive das inscrições na OAB)', async () => {
+    const error: ProblemDetail = {
+      status: 400,
+      code: 'DADOS_INVALIDOS',
+      message: 'Dados inválidos.',
+      errors: [{ field: 'oabRegistrations[0].number', message: 'deve ter até 6 dígitos' }],
+    }
+    server.use(http.post('*/api/auth/register', () => HttpResponse.json(error, { status: 400 })))
+    const { user } = renderRegister()
+
+    await user.click(screen.getByRole('radio', { name: 'Advogado' }))
     await user.type(screen.getByLabelText('Nome completo'), 'Ana Souza')
     await user.type(screen.getByLabelText('E-mail'), 'ana@x.test')
     await user.type(screen.getByLabelText('CPF'), '52998224725')
-    await user.type(screen.getByLabelText('Senha'), 'senha-segura')
-    await user.type(screen.getByLabelText('Confirmar senha'), 'senha-segura')
+    await user.type(screen.getByLabelText('Número da OAB'), '12345/BA')
+    await user.type(screen.getByLabelText('Senha'), 'Senha#Forte1')
+    await user.type(screen.getByLabelText('Confirmar senha'), 'Senha#Forte1')
     await user.click(screen.getByRole('button', { name: 'Criar conta' }))
 
-    expect(await screen.findByText('E-mail já cadastrado.')).toBeInTheDocument()
-    expect(screen.getByText('Verifique os dados informados.')).toBeInTheDocument()
-    expect(screen.getByLabelText('E-mail')).toHaveAttribute('aria-invalid', 'true')
+    expect(await screen.findByText('deve ter até 6 dígitos')).toBeInTheDocument()
+    expect(screen.getByText('Dados inválidos.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Número da OAB')).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('leva o conflito de e-mail (409) para o campo', async () => {
+    const { user } = renderRegister()
+
+    // O usuário de demonstração dos mocks já usa este e-mail.
+    await user.type(screen.getByLabelText('Nome completo'), 'Ana Souza')
+    await user.type(screen.getByLabelText('E-mail'), 'demo@veridt.test')
+    await user.type(screen.getByLabelText('CPF'), '11144477735')
+    await user.type(screen.getByLabelText('Senha'), 'Senha#Forte1')
+    await user.type(screen.getByLabelText('Confirmar senha'), 'Senha#Forte1')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('E-mail')).toHaveAttribute('aria-invalid', 'true'),
+    )
+    expect(screen.getAllByText('E-mail já cadastrado.')).toHaveLength(2)
   })
 })

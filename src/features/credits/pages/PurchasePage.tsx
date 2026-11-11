@@ -17,8 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select'
-import { formatNumber } from '@/shared/lib/format'
-import { CEP_MASK, CPF_MASK, formatCpf, PHONE_MASKS, UFS } from '@/shared/lib/validators'
+import { formatCredits } from '@/shared/lib/format'
+import { CEP_MASK, CPF_MASK, PHONE_MASKS, UFS } from '@/shared/lib/validators'
 
 import { usePackages, usePurchase } from '../api/credits'
 import type { CreditPackageId, Payment, PaymentMethod } from '../api/types'
@@ -65,12 +65,12 @@ export function PurchasePage() {
     defaultValues: purchaseDefaultValues(me, initialPackage),
   })
 
-  // Nome, e-mail e CPF vêm da conta (Figma: campos bloqueados).
+  // Nome e e-mail vêm da conta (Figma: campos bloqueados). O CPF é digitado:
+  // o backend não o devolve em `GET /api/me`, por segurança.
   useEffect(() => {
     if (!me) return
     form.setValue('fullName', me.fullName)
     form.setValue('email', me.email)
-    if (me.cpf) form.setValue('cpf', formatCpf(me.cpf))
   }, [me, form])
 
   const pay = (method: PaymentMethod) =>
@@ -115,13 +115,12 @@ export function PurchasePage() {
     })
 
   const submitting = form.formState.isSubmitting
-  const hasCpf = !!me?.cpf
 
   return (
     <>
       <PageHeader
         title="Compra de Créditos"
-        description={`Saldo de créditos atual: ${formatNumber(me?.creditBalance ?? 0)}`}
+        description={`Saldo de créditos atual: ${formatCredits(me?.creditBalance)}`}
       />
 
       <form noValidate onSubmit={(event) => event.preventDefault()} className="space-y-8">
@@ -174,8 +173,6 @@ export function PurchasePage() {
               mask={CPF_MASK}
               inputMode="numeric"
               placeholder="000.000.000-00"
-              readOnly={hasCpf}
-              className={hasCpf ? 'bg-muted text-muted-foreground' : undefined}
             />
             <FormTextField
               control={form.control}

@@ -16,7 +16,7 @@ import { useRegister } from '../api/auth'
 import { AuthCard } from '../components/AuthCard'
 import { authLinkClass } from '../lib/styles'
 import {
-  PASSWORD_MIN_LENGTH,
+  PASSWORD_HINT,
   registerDefaultValues,
   registerSchema,
   toRegisterRequest,
@@ -48,7 +48,14 @@ export function RegisterPage() {
       await navigate('/login', { state: { email: user.email } })
     } catch (error) {
       setFormError(
-        applyProblemDetailToForm(error, form.setError, { fieldMap: { oabNumber: 'oab' } }),
+        applyProblemDetailToForm(error, form.setError, {
+          fieldMap: { oabRegistrations: 'oab' },
+          codeMap: {
+            EMAIL_JA_CADASTRADO: 'email',
+            CPF_JA_CADASTRADO: 'cpf',
+            OAB_JA_CADASTRADA: 'oab',
+          },
+        }),
       )
     }
   })
@@ -146,7 +153,7 @@ export function RegisterPage() {
             type="password"
             autoComplete="new-password"
             placeholder="••••••••••"
-            description={`Mínimo de ${PASSWORD_MIN_LENGTH} caracteres.`}
+            description={PASSWORD_HINT}
           />
           <FormTextField
             control={form.control}

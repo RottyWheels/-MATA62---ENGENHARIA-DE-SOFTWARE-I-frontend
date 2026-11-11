@@ -13,6 +13,7 @@ test('comprar créditos com Pix atualiza o saldo', async ({ page }) => {
   await expect(page.getByText('Saldo de créditos atual: 10')).toBeVisible()
 
   await page.getByRole('button', { name: 'Escolher: Pacote Médio' }).click()
+  await page.getByLabel('CPF').pressSequentially('52998224725')
   await page.getByLabel('Telefone').pressSequentially('71998765432')
   await page.getByLabel('CEP').pressSequentially('40170115')
   await page.getByLabel('Endereço').fill('Av. Adhemar de Barros')

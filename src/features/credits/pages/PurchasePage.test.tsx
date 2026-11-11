@@ -16,6 +16,7 @@ const routes = [
 ]
 
 async function fillBilling(user: ReturnType<typeof renderRoutes>['user']) {
+  await user.type(screen.getByLabelText('CPF'), '52998224725')
   await user.type(screen.getByLabelText('Telefone'), '71998765432')
   await user.type(screen.getByLabelText('CEP'), '40170115')
   await user.type(screen.getByLabelText('Endereço'), 'Av. Adhemar de Barros')
@@ -31,7 +32,7 @@ describe('PurchasePage', () => {
     await loginAsDemo()
   })
 
-  it('mostra os pacotes e pré-preenche nome, e-mail e CPF da conta', async () => {
+  it('mostra os pacotes e pré-preenche nome e e-mail da conta', async () => {
     renderRoutes(routes, '/creditos')
 
     for (const pkg of MOCK_PACKAGES) {
@@ -40,7 +41,9 @@ describe('PurchasePage', () => {
     expect(screen.getByText('Saldo de créditos atual: 10')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByLabelText('Nome completo')).toHaveValue('Usuária Demo'))
     expect(screen.getByLabelText('E-mail')).toHaveValue('demo@veridt.test')
-    expect(screen.getByLabelText('CPF')).toHaveValue('529.982.247-25')
+    // O backend não devolve o CPF em /api/me: o usuário digita.
+    expect(screen.getByLabelText('CPF')).toHaveValue('')
+    expect(screen.getByLabelText('CPF')).not.toHaveAttribute('readonly')
   })
 
   it('exige pacote e dados de faturamento antes de pagar', async () => {

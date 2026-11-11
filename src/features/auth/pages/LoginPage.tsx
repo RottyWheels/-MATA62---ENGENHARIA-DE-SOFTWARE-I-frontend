@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useLocation } from 'react-router'
 
-import { applyProblemDetailToForm, getProblemDetail } from '@/shared/api/problem-detail'
+import { applyProblemDetailToForm, getErrorMessage } from '@/shared/api/problem-detail'
 import { FormError } from '@/shared/components/form/FormError'
 import { FormTextField } from '@/shared/components/form/FormTextField'
 import { Button } from '@/shared/components/ui/button'
@@ -32,12 +32,12 @@ export function LoginPage() {
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null)
     try {
-      // Ao gravar o usuário na query ['me'], o <RedirectIfAuthenticated> leva para o
+      // O login busca o usuário em ['me'] e o <RedirectIfAuthenticated> leva para o
       // `?redirect=` (ou `/`). Navegar aqui também causaria duas navegações concorrentes.
       await login.mutateAsync(values)
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {
-        setFormError(getProblemDetail(error)?.detail ?? 'E-mail ou senha inválidos.')
+        setFormError(getErrorMessage(error))
         return
       }
       setFormError(applyProblemDetailToForm(error, form.setError))

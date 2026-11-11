@@ -2,11 +2,11 @@ import { onlyDigits } from './digits'
 import { isValidUf, type UF } from './uf'
 
 /**
- * Número de inscrição na OAB: até 6 dígitos (sem a UF).
- * Formato enviado ao backend: `"<numero>/<UF>"` — PROVISÓRIO, a confirmar (README, pendência 8).
+ * Número de inscrição na OAB: até 6 dígitos (sem a UF), diferente de zero.
+ * O backend recebe número, UF e tipo em campos separados (`oabRegistrations`).
  */
 export function isValidOabNumber(value: string): boolean {
-  return /^\d{1,6}$/.test(value.trim())
+  return /^(?!0+$)\d{1,6}$/.test(value.trim())
 }
 
 export function formatOab(numero: string, uf: UF): string {
@@ -15,6 +15,6 @@ export function formatOab(numero: string, uf: UF): string {
 
 export function parseOab(value: string): { numero: string; uf: UF } | null {
   const match = /^(\d{1,6})\/([A-Z]{2})$/.exec(value.trim().toUpperCase())
-  if (!match?.[1] || !match[2] || !isValidUf(match[2])) return null
+  if (!match?.[1] || !match[2] || !isValidUf(match[2]) || !isValidOabNumber(match[1])) return null
   return { numero: match[1], uf: match[2] }
 }

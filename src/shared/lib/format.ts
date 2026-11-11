@@ -41,6 +41,11 @@ export function formatNumber(value: number): string {
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const
 
 /** `1,5 MB` (base 1024) */
+/** Saldo de créditos; `—` enquanto o backend não informa o saldo. */
+export function formatCredits(balance: number | undefined): string {
+  return balance === undefined ? '—' : formatNumber(balance)
+}
+
 export function formatFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '—'
   let size = bytes

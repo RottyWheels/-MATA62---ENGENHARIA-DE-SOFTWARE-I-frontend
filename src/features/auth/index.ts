@@ -5,6 +5,9 @@ export { getMeQueryKey, refreshCsrf, useLogout, useMe } from './api/auth'
 export { AUTH_ENDPOINTS } from './api/endpoints'
 export type {
   LoginRequest,
+  OabRegistration,
+  OabRegistrationType,
+  PasswordResetConfirmRequest,
   PasswordResetRequest,
   RegisterRequest,
   User,

@@ -1,6 +1,6 @@
 /**
  * Protocolo do WebSocket `/ws/capture/{sessionId}` — PROVISÓRIO,
- * a confirmar com o backend (README, pendência 7).
+ * a confirmar com o backend (README, pendências com o backend, item 5).
  */
 
 export type CaptureStatus = 'RECORDING' | 'FINISHED' | 'FAILED'

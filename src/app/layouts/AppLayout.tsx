@@ -12,7 +12,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/shared/components/ui/sheet'
-import { formatNumber } from '@/shared/lib/format'
+import { formatCredits } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 
 import { NAV_ITEMS } from './nav-items'
@@ -78,7 +78,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="min-w-0 text-sm leading-tight">
             <p className="truncate font-medium">{me?.fullName}</p>
             <p className="text-xs text-sidebar-foreground/80" data-testid="saldo-creditos">
-              Créditos: {formatNumber(me?.creditBalance ?? 0)}
+              Créditos: {formatCredits(me?.creditBalance)}
             </p>
           </div>
         </div>

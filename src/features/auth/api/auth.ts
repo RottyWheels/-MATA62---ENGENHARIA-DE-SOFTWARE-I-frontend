@@ -4,7 +4,13 @@ import { customInstance, type ErrorType } from '@/shared/api/http'
 import type { ProblemDetail } from '@/shared/api/problem-detail'
 
 import { AUTH_ENDPOINTS } from './endpoints'
-import type { LoginRequest, PasswordResetRequest, RegisterRequest, User } from './types'
+import type {
+  LoginRequest,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
+  RegisterRequest,
+  User,
+} from './types'
 
 // Escrito à mão no formato do orval (funções + query keys + hooks).
 
@@ -29,8 +35,9 @@ export async function refreshCsrf() {
 export const getMe = (signal?: AbortSignal) =>
   customInstance<User>({ url: AUTH_ENDPOINTS.me, method: 'GET', signal })
 
+/** 204 sem corpo: o usuário vem depois, de `GET /api/me`. */
 export const postLogin = (body: LoginRequest) =>
-  customInstance<User>({ url: AUTH_ENDPOINTS.login, method: 'POST', data: body })
+  customInstance<void>({ url: AUTH_ENDPOINTS.login, method: 'POST', data: body })
 
 export const postLogout = () => customInstance<void>({ url: AUTH_ENDPOINTS.logout, method: 'POST' })
 
@@ -39,6 +46,9 @@ export const postRegister = (body: RegisterRequest) =>
 
 export const postPasswordReset = (body: PasswordResetRequest) =>
   customInstance<void>({ url: AUTH_ENDPOINTS.passwordReset, method: 'POST', data: body })
+
+export const postPasswordResetConfirm = (body: PasswordResetConfirmRequest) =>
+  customInstance<void>({ url: AUTH_ENDPOINTS.passwordResetConfirm, method: 'POST', data: body })
 
 export const getMeQueryKey = () => ['me'] as const
 
@@ -56,13 +66,16 @@ export function useMe() {
 
 export function useLogin() {
   const queryClient = useQueryClient()
-  return useMutation<User, AuthError, LoginRequest>({
+  return useMutation<void, AuthError, LoginRequest>({
     mutationFn: postLogin,
-    onSuccess: async (user) => {
+    onSuccess: async () => {
       // O Spring troca o token CSRF após autenticar.
       await refreshCsrf()
-      queryClient.setQueryData(getMeQueryKey(), user)
-      await queryClient.invalidateQueries({ queryKey: getMeQueryKey() })
+      // Com o usuário na query ['me'], o <RedirectIfAuthenticated> sai do login.
+      await queryClient.fetchQuery({
+        queryKey: getMeQueryKey(),
+        queryFn: ({ signal }) => getMe(signal),
+      })
     },
   })
 }
@@ -84,4 +97,10 @@ export function useRegister() {
 
 export function usePasswordReset() {
   return useMutation<void, AuthError, PasswordResetRequest>({ mutationFn: postPasswordReset })
+}
+
+export function usePasswordResetConfirm() {
+  return useMutation<void, AuthError, PasswordResetConfirmRequest>({
+    mutationFn: postPasswordResetConfirm,
+  })
 }

@@ -85,5 +85,8 @@ describe('OAB e UF', () => {
     expect(formatOab('12345', 'BA')).toBe('12345/BA')
     expect(parseOab('12345/sc')).toEqual({ numero: '12345', uf: 'SC' })
     expect(parseOab('12345/XX')).toBeNull()
+    // Como o backend: número zero não é inscrição válida.
+    expect(parseOab('000/BA')).toBeNull()
+    expect(isValidOabNumber('0')).toBe(false)
   })
 })
