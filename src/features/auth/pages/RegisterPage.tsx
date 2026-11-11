@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
-import { Controller, useForm, useWatch } from 'react-hook-form'
+import { Controller, useForm, useWatch, type FieldPath } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 
@@ -14,6 +14,7 @@ import { CPF_MASK } from '@/shared/lib/validators'
 
 import { useRegister } from '../api/auth'
 import { AuthCard } from '../components/AuthCard'
+import { OabRegistrationsField } from '../components/OabRegistrationsField'
 import { authLinkClass } from '../lib/styles'
 import {
   EMAIL_MAX_LENGTH,
@@ -24,6 +25,19 @@ import {
   toRegisterRequest,
   type RegisterFormValues,
 } from '../schemas/auth'
+
+/**
+ * Traduz o campo do backend para o formulário:
+ * `oabRegistrations[1].number` → `oabRegistrations.1.oab`, `[1].type` → `.1.type`.
+ */
+function resolveOabField(field: string): FieldPath<RegisterFormValues> | undefined {
+  const match = /^oabRegistrations\[(\d+)\]\.(number|state|type)$/.exec(field)
+  if (match) {
+    const index = Number(match[1])
+    return match[2] === 'type' ? `oabRegistrations.${index}.type` : `oabRegistrations.${index}.oab`
+  }
+  return field.startsWith('oabRegistrations') ? 'oabRegistrations' : undefined
+}
 
 const USER_TYPES = [
   { value: 'COMUM', label: 'Usuário Comum' },
@@ -51,11 +65,11 @@ export function RegisterPage() {
     } catch (error) {
       setFormError(
         applyProblemDetailToForm(error, form.setError, {
-          fieldMap: { oabRegistrations: 'oab' },
+          resolveField: resolveOabField,
           codeMap: {
             EMAIL_JA_CADASTRADO: 'email',
             CPF_JA_CADASTRADO: 'cpf',
-            OAB_JA_CADASTRADA: 'oab',
+            OAB_JA_CADASTRADA: 'oabRegistrations',
           },
         }),
       )
@@ -129,26 +143,18 @@ export function RegisterPage() {
             placeholder="seu@email.com"
           />
 
-          <div className={isLawyer ? 'grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-3' : undefined}>
-            <FormTextField
-              control={form.control}
-              name="cpf"
-              label="CPF"
-              mask={CPF_MASK}
-              inputMode="numeric"
-              placeholder="000.000.000-00"
-            />
-            {isLawyer && (
-              <FormTextField
-                control={form.control}
-                name="oab"
-                label="Número da OAB"
-                placeholder="000000/UF"
-                autoCapitalize="characters"
-                maxLength={9}
-              />
-            )}
-          </div>
+          <FormTextField
+            control={form.control}
+            name="cpf"
+            label="CPF"
+            mask={CPF_MASK}
+            inputMode="numeric"
+            placeholder="000.000.000-00"
+          />
+
+          {isLawyer && (
+            <OabRegistrationsField control={form.control} errors={form.formState.errors} />
+          )}
 
           <FormTextField
             control={form.control}

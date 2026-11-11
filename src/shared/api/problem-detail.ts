@@ -51,6 +51,11 @@ type ApplyOptions<T extends FieldValues> = {
   /** Mapeia o nome do campo no backend para o caminho no formulário. */
   fieldMap?: Partial<Record<string, FieldPath<T>>>
   /**
+   * Tradução livre do campo, para nomes com índice
+   * (ex.: `oabRegistrations[1].number` → `oabRegistrations.1.oab`). Tem prioridade sobre `fieldMap`.
+   */
+  resolveField?: (field: string) => FieldPath<T> | undefined
+  /**
    * Erros sem `errors[]` que pertencem a um campo, pelo `code`
    * (ex.: `EMAIL_JA_CADASTRADO` → `email`). A mensagem vai para o campo.
    */
@@ -85,7 +90,10 @@ export function applyProblemDetailToForm<T extends FieldValues>(
   let focused = false
   for (const { field, message } of problem.errors ?? []) {
     const path =
-      options.fieldMap?.[field] ?? options.fieldMap?.[baseField(field)] ?? (field as FieldPath<T>)
+      options.resolveField?.(field) ??
+      options.fieldMap?.[field] ??
+      options.fieldMap?.[baseField(field)] ??
+      (field as FieldPath<T>)
     setError(path, { type: 'server', message }, { shouldFocus: !focused })
     focused = true
   }

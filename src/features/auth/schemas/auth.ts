@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 import { isValidCpf, onlyDigits, parseOab } from '@/shared/lib/validators'
 
-import type { RegisterRequest } from '../api/types'
+import type { OabRegistrationType, RegisterRequest } from '../api/types'
 
 /** Limites dos DTOs do backend (`RegisterUserRequest`, `LoginRequest`). */
 export const FULL_NAME_MAX_LENGTH = 150
@@ -65,6 +65,68 @@ export type NewPasswordFormValues = z.infer<typeof newPasswordSchema>
 
 // ---- Cadastro ----
 
+export const OAB_REGISTRATION_TYPES = ['PRINCIPAL', 'SUPLEMENTAR', 'ESTAGIARIO'] as const
+/** Limite do backend (`RegisterUserRequest.oabRegistrations`). */
+export const OAB_MAX_REGISTRATIONS = 30
+
+export const OAB_REGISTRATION_TYPE_LABELS: Record<OabRegistrationType, string> = {
+  PRINCIPAL: 'Principal',
+  SUPLEMENTAR: 'Suplementar',
+  ESTAGIARIO: 'Estagiário',
+}
+
+type OabRegistrationFormValue = { oab: string; type: OabRegistrationType }
+
+export function emptyOabRegistration(
+  type: OabRegistrationType = 'PRINCIPAL',
+): OabRegistrationFormValue {
+  return { oab: '', type }
+}
+
+/** Mesmas regras do `OabValidator` do backend, com o erro no campo certo de cada inscrição. */
+function validateOabRegistrations(registrations: OabRegistrationFormValue[], ctx: z.RefinementCtx) {
+  if (registrations.length === 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['oabRegistrations'],
+      message: 'Informe ao menos uma inscrição na OAB.',
+    })
+    return
+  }
+
+  const seen = new Set<string>()
+  let principals = 0
+  registrations.forEach((registration, index) => {
+    const path = ['oabRegistrations', index]
+    if (!registration.oab.trim()) {
+      ctx.addIssue({ code: 'custom', path: [...path, 'oab'], message: 'Informe o número da OAB.' })
+      return
+    }
+    const parsed = parseOab(registration.oab)
+    if (!parsed) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [...path, 'oab'],
+        message: 'Use o formato número/UF, ex.: 12345/BA.',
+      })
+      return
+    }
+    // O backend ignora zeros à esquerda: 00123/BA e 123/BA são a mesma inscrição.
+    const key = `${Number(parsed.numero)}/${parsed.uf}/${registration.type}`
+    if (seen.has(key)) {
+      ctx.addIssue({ code: 'custom', path: [...path, 'oab'], message: 'Inscrição repetida.' })
+    }
+    seen.add(key)
+    if (registration.type === 'PRINCIPAL' && ++principals > 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [...path, 'type'],
+        message: 'Só pode haver uma inscrição principal.',
+      })
+    }
+  })
+}
+
 export const registerSchema = z
   .object({
     type: z.enum(['ADVOGADO', 'COMUM'], { error: 'Selecione o tipo de cadastro.' }),
@@ -78,23 +140,16 @@ export const registerSchema = z
     password: newPassword,
     confirmPassword: z.string().min(1, 'Confirme a senha.'),
     cpf: z.string().min(1, 'Informe o CPF.').refine(isValidCpf, 'CPF inválido.'),
-    // OAB no formato `000000/UF` (Figma): só aparece e só é obrigatória para advogado.
-    oab: z.string(),
+    // Inscrições na OAB, cada uma no formato `000000/UF` (Figma): só aparecem e
+    // só são obrigatórias para advogado.
+    oabRegistrations: z
+      .array(z.object({ oab: z.string(), type: z.enum(OAB_REGISTRATION_TYPES) }))
+      .max(OAB_MAX_REGISTRATIONS, `Informe no máximo ${OAB_MAX_REGISTRATIONS} inscrições.`),
   })
   .superRefine(
     (data, ctx) => {
       passwordsMatch(data, ctx)
-      if (data.type === 'ADVOGADO') {
-        if (!data.oab.trim()) {
-          ctx.addIssue({ code: 'custom', path: ['oab'], message: 'Informe o número da OAB.' })
-        } else if (!parseOab(data.oab)) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['oab'],
-            message: 'Use o formato número/UF, ex.: 12345/BA.',
-          })
-        }
-      }
+      if (data.type === 'ADVOGADO') validateOabRegistrations(data.oabRegistrations, ctx)
     },
     // Roda mesmo com erros em outros campos, para mostrar tudo de uma vez.
     { when: () => true },
@@ -109,12 +164,12 @@ export const registerDefaultValues: RegisterFormValues = {
   password: '',
   confirmPassword: '',
   cpf: '',
-  oab: '',
+  oabRegistrations: [emptyOabRegistration()],
 }
 
 /**
- * Converte o formulário no corpo da API: CPF só com dígitos e a OAB `000000/UF`
- * como a inscrição principal do advogado.
+ * Converte o formulário no corpo da API: CPF só com dígitos e cada OAB `000000/UF`
+ * como `{ number, state, type }` (só para advogado).
  */
 export function toRegisterRequest(values: RegisterFormValues): RegisterRequest {
   const request: RegisterRequest = {
@@ -124,7 +179,11 @@ export function toRegisterRequest(values: RegisterFormValues): RegisterRequest {
     password: values.password,
     cpf: onlyDigits(values.cpf),
   }
-  const oab = values.type === 'ADVOGADO' ? parseOab(values.oab) : null
-  if (oab) request.oabRegistrations = [{ number: oab.numero, state: oab.uf, type: 'PRINCIPAL' }]
+  if (values.type === 'ADVOGADO') {
+    request.oabRegistrations = values.oabRegistrations.flatMap(({ oab, type }) => {
+      const parsed = parseOab(oab)
+      return parsed ? [{ number: parsed.numero, state: parsed.uf, type }] : []
+    })
+  }
   return request
 }

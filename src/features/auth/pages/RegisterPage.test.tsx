@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
@@ -153,5 +153,135 @@ describe('RegisterPage', () => {
       expect(screen.getByLabelText('E-mail')).toHaveAttribute('aria-invalid', 'true'),
     )
     expect(screen.getAllByText('E-mail já cadastrado.')).toHaveLength(2)
+  })
+})
+
+type User = ReturnType<typeof renderRegister>['user']
+
+async function fillLawyer(user: User) {
+  await user.click(screen.getByRole('radio', { name: 'Advogado' }))
+  await user.type(screen.getByLabelText('Nome completo'), 'Bruno Lima')
+  await user.type(screen.getByLabelText('E-mail'), 'bruno@x.test')
+  await user.type(screen.getByLabelText('CPF'), '11144477735')
+  await user.type(screen.getByLabelText('Senha'), 'Senha#Forte1')
+  await user.type(screen.getByLabelText('Confirmar senha'), 'Senha#Forte1')
+}
+
+async function chooseType(user: User, label: string, option: string) {
+  await user.click(screen.getByRole('combobox', { name: label }))
+  await user.click(within(screen.getByRole('listbox')).getByRole('option', { name: option }))
+}
+
+describe('RegisterPage: várias inscrições na OAB', () => {
+  it('envia todas as inscrições com o tipo de cada uma', async () => {
+    let body: unknown
+    server.use(
+      http.post('*/api/auth/register', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json({ email: 'bruno@x.test' }, { status: 201 })
+      }),
+    )
+    const { user } = renderRegister()
+    await fillLawyer(user)
+
+    await user.type(screen.getByLabelText('Número da OAB'), '12345/ba')
+    await user.click(screen.getByRole('button', { name: 'Adicionar inscrição' }))
+    // A segunda já começa como suplementar.
+    expect(screen.getByRole('combobox', { name: 'Tipo da inscrição 2' })).toHaveTextContent(
+      'Suplementar',
+    )
+    await user.type(screen.getByLabelText('Número da OAB, inscrição 2'), '999/sp')
+    await user.click(screen.getByRole('button', { name: 'Adicionar inscrição' }))
+    await user.type(screen.getByLabelText('Número da OAB, inscrição 3'), '00777/ba')
+    await chooseType(user, 'Tipo da inscrição 3', 'Estagiário')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+
+    expect(await screen.findByText('tela de login')).toBeInTheDocument()
+    expect(body).toMatchObject({
+      type: 'ADVOGADO',
+      oabRegistrations: [
+        { number: '12345', state: 'BA', type: 'PRINCIPAL' },
+        { number: '999', state: 'SP', type: 'SUPLEMENTAR' },
+        { number: '00777', state: 'BA', type: 'ESTAGIARIO' },
+      ],
+    })
+  })
+
+  it('recusa duas principais e inscrições repetidas, como o backend', async () => {
+    const { user } = renderRegister()
+    await fillLawyer(user)
+
+    await user.type(screen.getByLabelText('Número da OAB'), '12345/BA')
+    await user.click(screen.getByRole('button', { name: 'Adicionar inscrição' }))
+    await user.type(screen.getByLabelText('Número da OAB, inscrição 2'), '12345/BA')
+    await chooseType(user, 'Tipo da inscrição 2', 'Principal')
+    await user.click(screen.getByRole('button', { name: 'Adicionar inscrição' }))
+    // Zeros à esquerda não escapam da repetição: 012345/BA é a mesma inscrição.
+    await user.type(screen.getByLabelText('Número da OAB, inscrição 3'), '012345/BA')
+    await chooseType(user, 'Tipo da inscrição 3', 'Principal')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+
+    expect(await screen.findAllByText('Inscrição repetida.')).toHaveLength(2)
+    expect(screen.getAllByText('Só pode haver uma inscrição principal.')).toHaveLength(2)
+    expect(screen.getByLabelText('Número da OAB')).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('remove inscrições, mas mantém sempre a primeira', async () => {
+    const { user } = renderRegister()
+    await user.click(screen.getByRole('radio', { name: 'Advogado' }))
+
+    expect(screen.queryByRole('button', { name: /Remover inscrição/ })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Adicionar inscrição' }))
+    await user.type(screen.getByLabelText('Número da OAB, inscrição 2'), '999/SP')
+    await user.click(screen.getByRole('button', { name: 'Remover inscrição 2' }))
+
+    expect(screen.queryByLabelText('Número da OAB, inscrição 2')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Número da OAB')).toBeInTheDocument()
+  })
+
+  it('leva o erro do backend para a inscrição certa', async () => {
+    server.use(
+      http.post('*/api/auth/register', () =>
+        HttpResponse.json(
+          {
+            status: 400,
+            code: 'DADOS_INVALIDOS',
+            message: 'Dados inválidos.',
+            errors: [{ field: 'oabRegistrations[1].number', message: 'número inválido' }],
+          },
+          { status: 400 },
+        ),
+      ),
+    )
+    const { user } = renderRegister()
+    await fillLawyer(user)
+    await user.type(screen.getByLabelText('Número da OAB'), '12345/BA')
+    await user.click(screen.getByRole('button', { name: 'Adicionar inscrição' }))
+    await user.type(screen.getByLabelText('Número da OAB, inscrição 2'), '999/SP')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+
+    expect(await screen.findByText('número inválido')).toBeInTheDocument()
+    expect(screen.getByLabelText('Número da OAB, inscrição 2')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    )
+    expect(screen.getByLabelText('Número da OAB')).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('mostra o conflito de OAB (409) junto da lista de inscrições', async () => {
+    server.use(
+      http.post('*/api/auth/register', () =>
+        HttpResponse.json(
+          { status: 409, code: 'OAB_JA_CADASTRADA', message: 'Inscrição na OAB já cadastrada.' },
+          { status: 409 },
+        ),
+      ),
+    )
+    const { user } = renderRegister()
+    await fillLawyer(user)
+    await user.type(screen.getByLabelText('Número da OAB'), '12345/BA')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+
+    expect(await screen.findAllByText('Inscrição na OAB já cadastrada.')).toHaveLength(2)
   })
 })

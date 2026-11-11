@@ -14,6 +14,8 @@ type FormTextFieldProps<T extends FieldValues> = {
   description?: ReactNode
   /** Quando informada, usa o react-imask. */
   mask?: MaskMask
+  /** Esconde o label visualmente, mantendo-o para leitores de tela. */
+  hideLabel?: boolean
 } & Omit<ComponentProps<'input'>, 'name' | 'value' | 'defaultValue' | 'onChange' | 'onBlur'>
 
 /** Campo de texto ligado ao React Hook Form, com label, descrição e erro acessíveis. */
@@ -23,6 +25,7 @@ export function FormTextField<T extends FieldValues>({
   label,
   description,
   mask,
+  hideLabel,
   id,
   ...inputProps
 }: FormTextFieldProps<T>) {
@@ -46,7 +49,9 @@ export function FormTextField<T extends FieldValues>({
 
   return (
     <Field data-invalid={fieldState.invalid || undefined}>
-      <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
+      <FieldLabel htmlFor={inputId} className={hideLabel ? 'sr-only' : undefined}>
+        {label}
+      </FieldLabel>
       {mask ? (
         <MaskedInput {...common} mask={mask} value={value} onValueChange={field.onChange} />
       ) : inputProps.type === 'password' ? (
