@@ -4,10 +4,15 @@ import { isValidCpf, onlyDigits, parseOab } from '@/shared/lib/validators'
 
 import type { RegisterRequest } from '../api/types'
 
+/** Limites dos DTOs do backend (`RegisterUserRequest`, `LoginRequest`). */
+export const FULL_NAME_MAX_LENGTH = 150
+export const EMAIL_MAX_LENGTH = 254
+
 const email = z
   .string()
   .trim()
   .min(1, 'Informe o e-mail.')
+  .max(EMAIL_MAX_LENGTH, `O e-mail deve ter no máximo ${EMAIL_MAX_LENGTH} caracteres.`)
   .pipe(z.email('Informe um e-mail válido.'))
 
 /** Política de senha do backend (`PasswordPolicy`): 8 a 128 caracteres, com letra, número e símbolo. */
@@ -33,7 +38,10 @@ function passwordsMatch(data: { password: string; confirmPassword: string }, ctx
 
 export const loginSchema = z.object({
   email,
-  password: z.string().min(1, 'Informe a senha.'),
+  password: z
+    .string()
+    .min(1, 'Informe a senha.')
+    .max(PASSWORD_MAX_LENGTH, `A senha deve ter no máximo ${PASSWORD_MAX_LENGTH} caracteres.`),
 })
 
 export type LoginFormValues = z.infer<typeof loginSchema>
@@ -64,6 +72,7 @@ export const registerSchema = z
       .string()
       .trim()
       .min(1, 'Informe o nome completo.')
+      .max(FULL_NAME_MAX_LENGTH, `O nome deve ter no máximo ${FULL_NAME_MAX_LENGTH} caracteres.`)
       .refine((v) => v.split(/\s+/).length >= 2, 'Informe nome e sobrenome.'),
     email,
     password: newPassword,

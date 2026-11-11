@@ -16,6 +16,8 @@ import { useRegister } from '../api/auth'
 import { AuthCard } from '../components/AuthCard'
 import { authLinkClass } from '../lib/styles'
 import {
+  EMAIL_MAX_LENGTH,
+  FULL_NAME_MAX_LENGTH,
   PASSWORD_HINT,
   registerDefaultValues,
   registerSchema,
@@ -114,6 +116,7 @@ export function RegisterPage() {
             name="fullName"
             label="Nome completo"
             autoComplete="name"
+            maxLength={FULL_NAME_MAX_LENGTH}
             placeholder="Seu nome completo"
           />
           <FormTextField
@@ -122,6 +125,7 @@ export function RegisterPage() {
             label="E-mail"
             type="email"
             autoComplete="email"
+            maxLength={EMAIL_MAX_LENGTH}
             placeholder="seu@email.com"
           />
 
