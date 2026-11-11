@@ -153,7 +153,11 @@ export function RegisterPage() {
           />
 
           {isLawyer && (
-            <OabRegistrationsField control={form.control} errors={form.formState.errors} />
+            <OabRegistrationsField
+              control={form.control}
+              trigger={form.trigger}
+              watch={form.watch}
+            />
           )}
 
           <FormTextField

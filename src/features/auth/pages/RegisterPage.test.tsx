@@ -226,6 +226,40 @@ describe('RegisterPage: várias inscrições na OAB', () => {
     expect(screen.getByLabelText('Número da OAB')).not.toHaveAttribute('aria-invalid')
   })
 
+  it('atualiza os erros entre linhas quando a outra inscrição muda', async () => {
+    const { user } = renderRegister()
+    await fillLawyer(user)
+    await user.type(screen.getByLabelText('Número da OAB'), '12345/BA')
+    await user.click(screen.getByRole('button', { name: 'Adicionar inscrição' }))
+    await user.type(screen.getByLabelText('Número da OAB, inscrição 2'), '999/SP')
+    await chooseType(user, 'Tipo da inscrição 2', 'Principal')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+    expect(await screen.findByText('Só pode haver uma inscrição principal.')).toBeInTheDocument()
+
+    // Corrigir a PRIMEIRA linha resolve o erro mostrado na segunda.
+    await chooseType(user, 'Tipo', 'Suplementar')
+
+    await waitFor(() =>
+      expect(screen.queryByText('Só pode haver uma inscrição principal.')).not.toBeInTheDocument(),
+    )
+  })
+
+  it('remove a repetição quando a primeira linha muda', async () => {
+    const { user } = renderRegister()
+    await fillLawyer(user)
+    await user.type(screen.getByLabelText('Número da OAB'), '12345/BA')
+    await user.click(screen.getByRole('button', { name: 'Adicionar inscrição' }))
+    await user.type(screen.getByLabelText('Número da OAB, inscrição 2'), '12345/BA')
+    await chooseType(user, 'Tipo da inscrição 2', 'Principal')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+    expect(await screen.findByText('Inscrição repetida.')).toBeInTheDocument()
+
+    await user.clear(screen.getByLabelText('Número da OAB'))
+    await user.type(screen.getByLabelText('Número da OAB'), '54321/BA')
+
+    await waitFor(() => expect(screen.queryByText('Inscrição repetida.')).not.toBeInTheDocument())
+  })
+
   it('remove inscrições, mas mantém sempre a primeira', async () => {
     const { user } = renderRegister()
     await user.click(screen.getByRole('radio', { name: 'Advogado' }))
@@ -237,6 +271,36 @@ describe('RegisterPage: várias inscrições na OAB', () => {
 
     expect(screen.queryByLabelText('Número da OAB, inscrição 2')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Número da OAB')).toBeInTheDocument()
+  })
+
+  it('remover uma linha revalida as outras e devolve o foco para a anterior', async () => {
+    const { user } = renderRegister()
+    await fillLawyer(user)
+    await user.type(screen.getByLabelText('Número da OAB'), '12345/BA')
+    await user.click(screen.getByRole('button', { name: 'Adicionar inscrição' }))
+    await user.type(screen.getByLabelText('Número da OAB, inscrição 2'), '999/SP')
+    await user.click(screen.getByRole('button', { name: 'Adicionar inscrição' }))
+    await user.type(screen.getByLabelText('Número da OAB, inscrição 3'), '999/SP')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+    expect(await screen.findByText('Inscrição repetida.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Remover inscrição 2' }))
+
+    await waitFor(() => expect(screen.queryByText('Inscrição repetida.')).not.toBeInTheDocument())
+    expect(screen.getByLabelText('Número da OAB')).toHaveFocus()
+  })
+
+  it('a nova linha vem como principal se nenhuma for principal', async () => {
+    const { user } = renderRegister()
+    await user.click(screen.getByRole('radio', { name: 'Advogado' }))
+    await chooseType(user, 'Tipo', 'Estagiário')
+
+    await user.click(screen.getByRole('button', { name: 'Adicionar inscrição' }))
+
+    expect(screen.getByRole('combobox', { name: 'Tipo da inscrição 2' })).toHaveTextContent(
+      'Principal',
+    )
+    expect(screen.getByLabelText('Número da OAB, inscrição 2')).toHaveFocus()
   })
 
   it('leva o erro do backend para a inscrição certa', async () => {

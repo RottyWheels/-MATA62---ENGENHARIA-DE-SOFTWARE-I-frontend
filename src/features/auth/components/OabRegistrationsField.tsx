@@ -1,5 +1,14 @@
 import { PlusIcon, Trash2Icon } from 'lucide-react'
-import { Controller, useFieldArray, type Control, type FieldErrors } from 'react-hook-form'
+import { useEffect } from 'react'
+import {
+  Controller,
+  useFieldArray,
+  useFormState,
+  useWatch,
+  type Control,
+  type UseFormTrigger,
+  type UseFormWatch,
+} from 'react-hook-form'
 
 import { FormTextField } from '@/shared/components/form/FormTextField'
 import { Button } from '@/shared/components/ui/button'
@@ -22,23 +31,51 @@ import {
 
 type Props = {
   control: Control<RegisterFormValues>
-  errors: FieldErrors<RegisterFormValues>
+  trigger: UseFormTrigger<RegisterFormValues>
+  watch: UseFormWatch<RegisterFormValues>
 }
+
+/** Id do campo de número gerado pelo `FormTextField` (`campo-` + nome com `-`). */
+const numberInputId = (index: number) => `campo-oabRegistrations-${index}-oab`
 
 /**
  * Inscrições na OAB do advogado (o backend aceita várias: principal, suplementares
  * e de estagiário). Cada número segue o formato `000000/UF` do Figma.
  */
-export function OabRegistrationsField({ control, errors }: Props) {
+export function OabRegistrationsField({ control, trigger, watch }: Props) {
   const { fields, append, remove } = useFieldArray({ control, name: 'oabRegistrations' })
+  const registrations = useWatch({ control, name: 'oabRegistrations' })
+  const { errors, isSubmitted } = useFormState({ control, name: 'oabRegistrations' })
   const listError = errors.oabRegistrations?.root ?? errors.oabRegistrations
   const listErrorMessage = typeof listError?.message === 'string' ? listError.message : undefined
 
-  const addRegistration = () => {
-    // A primeira costuma ser a principal; as seguintes, suplementares.
-    append(emptyOabRegistration(fields.length === 0 ? 'PRINCIPAL' : 'SUPLEMENTAR'), {
-      shouldFocus: true,
+  // "Só uma principal" e "repetida" dependem de outras linhas. Depois do primeiro
+  // envio, o React Hook Form revalida só o campo alterado, o que deixaria o erro
+  // velho na outra linha; por isso a lista inteira é revalidada quando o usuário
+  // edita uma inscrição. Só edições (`type === 'change'`): revalidar logo após o
+  // envio apagaria os erros vindos do backend.
+  useEffect(() => {
+    if (!isSubmitted) return
+    const subscription = watch((_, { name, type }) => {
+      if (type === 'change' && name?.startsWith('oabRegistrations.')) {
+        void trigger('oabRegistrations')
+      }
     })
+    return () => subscription.unsubscribe()
+  }, [isSubmitted, trigger, watch])
+
+  const addRegistration = () => {
+    // Sem nenhuma principal, a nova linha já vem como principal.
+    const hasPrincipal = registrations.some((r) => r.type === 'PRINCIPAL')
+    append(emptyOabRegistration(hasPrincipal ? 'SUPLEMENTAR' : 'PRINCIPAL'), { shouldFocus: true })
+  }
+
+  const removeRegistration = (index: number) => {
+    remove(index)
+    // Tirar uma linha pode resolver (ou criar) erro em outra.
+    if (isSubmitted) void trigger('oabRegistrations')
+    // O botão some com a linha: leva o foco para o número da linha anterior.
+    document.getElementById(numberInputId(index - 1))?.focus()
   }
 
   return (
@@ -100,7 +137,7 @@ export function OabRegistrationsField({ control, errors }: Props) {
                     variant="ghost"
                     size="icon"
                     aria-label={`Remover inscrição ${position}`}
-                    onClick={() => remove(index)}
+                    onClick={() => removeRegistration(index)}
                   >
                     <Trash2Icon />
                   </Button>
