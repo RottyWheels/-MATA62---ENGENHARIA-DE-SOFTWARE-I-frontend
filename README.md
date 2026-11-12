@@ -7,6 +7,8 @@ Este repositório contém **a base do frontend**: ambiente, ferramentas e infrae
 Requisitos, ADRs e táticas arquiteturais estão em [`iuryyxd/MATA62-Veridt`](https://github.com/iuryyxd/MATA62-Veridt). As telas finais vêm do [Figma do Veridt](https://www.figma.com/design/D4vDhuk1DBAJY9knexl7Hs/Veridt?node-id=0-1); o tema foi centralizado em `src/index.css` para facilitar a troca.
 
 > **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação e redefinição de senha, logout) ligado ao backend real (branch `desenv`, ver [Integração com o backend](#integração-com-o-backend)) e também aos mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) também funciona contra os mocks. As telas de captura e registros ainda são placeholders (ver [Rotas](#rotas) e [Próximos passos](#próximos-passos)).
+>
+> O que foi entregue em cada sprint está em [`docs/sprints/`](docs/sprints/): [Sprint 1](docs/sprints/sprint-1.md).
 
 ## Stack
 
