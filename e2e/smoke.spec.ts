@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-// Roda com VITE_ENABLE_MOCKS=true (ver playwright.config.ts): o MSW faz o papel do backend.
+// Roda com VITE_ENABLE_MOCKS=true (ver e2e/playwright.config.ts): o MSW faz o papel do backend.
 
 test('rota protegida sem sessão vai para o login com redirect', async ({ page }) => {
   await page.goto('/registros')

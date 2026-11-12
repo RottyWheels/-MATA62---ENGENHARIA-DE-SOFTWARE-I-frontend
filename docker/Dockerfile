@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+# Build a partir da raiz do repositório: docker build -f docker/Dockerfile -t veridt-frontend .
 
 # ---- build ----
 FROM node:24-alpine AS build
@@ -17,7 +18,7 @@ RUN pnpm build
 
 # ---- runtime ----
 FROM nginx:alpine AS runtime
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 # O service worker do MSW é só para desenvolvimento.
 RUN rm -f /usr/share/nginx/html/mockServiceWorker.js

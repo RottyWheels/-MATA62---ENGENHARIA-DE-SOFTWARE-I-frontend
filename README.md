@@ -223,11 +223,13 @@ pnpm e2e
 
 ## Docker
 
+Os arquivos ficam em `docker/`; o build roda a partir da raiz do repositório:
+
 ```bash
-docker build -t veridt-frontend .
+docker build -f docker/Dockerfile -t veridt-frontend .
 ```
 
-`Dockerfile` multi-stage: build com Node + pnpm e execução com `nginx:alpine`. O `nginx.conf`:
+`docker/Dockerfile` multi-stage: build com Node + pnpm e execução com `nginx:alpine`. O `docker/Dockerfile.dockerignore` tira `node_modules`, `.env` e afins do contexto (o Docker o lê por estar ao lado do `Dockerfile`). O `docker/nginx.conf`:
 
 - serve o `dist/` com fallback de SPA (`try_files $uri /index.html`);
 - faz proxy de `/api/` e `/ws/` (com `Upgrade`/`Connection`) para `http://backend:8080`, repassando `Host`, `X-Forwarded-For` e `X-Forwarded-Proto`;
@@ -252,6 +254,7 @@ services:
   frontend:
     build:
       context: ../-MATA62---ENGENHARIA-DE-SOFTWARE-I-frontend # caminho deste repositório
+      dockerfile: docker/Dockerfile
     # ou: image: veridt-frontend:latest
     ports:
       - '80:80' # ou "3000:80"
@@ -280,9 +283,9 @@ src/
   features/
     auth/                 # módulo identity (REQ 01–04)
       api/                # endpoints.ts, types.ts, auth.ts (hooks no formato do orval)
-      components/         # RequireAuth, RedirectIfAuthenticated, AuthCard
+      components/         # RequireAuth, RedirectIfAuthenticated, AuthCard, OabRegistrationsField
       lib/                # safeRedirect
-      pages/              # Login, Cadastro, Recuperar senha (+ testes)
+      pages/              # Login, Cadastro, Recuperar e Redefinir senha (+ testes)
       schemas/            # schemas Zod
       index.ts            # API pública da feature
     credits/              # módulo credits (REQ 05–07)
@@ -296,7 +299,7 @@ src/
     api/
       http.ts             # instância Axios, interceptores, customInstance (orval)
       query-client.ts     # QueryClient da aplicação
-      problem-detail.ts   # tipos e utilitários de erro RFC 9457
+      problem-detail.ts   # erros da API (ErrorResponse do backend e RFC 9457)
       generated/          # saída do orval (commitada)
     components/
       ui/                 # componentes shadcn/ui
@@ -315,8 +318,13 @@ src/
     setup.ts              # jest-dom, MSW, stubs do jsdom
     render.tsx            # renderRoutes(): memory router + QueryClient
     session.ts            # loginAsDemo(): abre a sessão simulada
-e2e/                    # smoke.spec.ts, credits.spec.ts
+e2e/                    # testes Playwright e playwright.config.ts
+docker/                 # Dockerfile, Dockerfile.dockerignore, nginx.conf
+docs/sprints/           # o que foi entregue em cada sprint
+public/                 # arquivos servidos como estão (service worker do MSW)
 ```
+
+Na raiz ficam só os arquivos que as ferramentas procuram lá: `package.json` (com a configuração do Prettier), `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `index.html` (entrada do Vite), `vite.config.ts` (também a do Vitest, na chave `test`), os `tsconfig*.json`, `eslint.config.js`, `orval.config.ts`, `components.json` (shadcn) e os arquivos de editor e Git (`.editorconfig`, `.gitattributes`, `.gitignore`, `.nvmrc`, `.prettierignore`, `.env.example`).
 
 Use o alias `@/` → `src/`. Uma feature não importa os arquivos internos de outra: dentro dela use imports relativos e, entre features, a API pública `@/features/<nome>`. O ESLint impõe essa regra. O que for comum vai para `shared/`.
 

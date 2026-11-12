@@ -17,7 +17,7 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test",
+    "e2e": "playwright test -c e2e/playwright.config.ts",
     "api:generate": "orval --config orval.config.ts"
   },
   "dependencies": {
@@ -72,6 +72,20 @@
   "msw": {
     "workerDirectory": [
       "public"
+    ]
+  },
+  "prettier": {
+    "semi": false,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "printWidth": 100,
+    "plugins": [
+      "prettier-plugin-tailwindcss"
+    ],
+    "tailwindStylesheet": "./src/index.css",
+    "tailwindFunctions": [
+      "cn",
+      "cva"
     ]
   }
 }
