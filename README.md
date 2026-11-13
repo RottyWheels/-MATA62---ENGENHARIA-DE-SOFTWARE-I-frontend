@@ -8,7 +8,7 @@ Requisitos, ADRs e táticas arquiteturais estão em [`iuryyxd/MATA62-Veridt`](ht
 
 > **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação e redefinição de senha, logout) ligado ao backend real (branch `desenv`, ver [Integração com o backend](#integração-com-o-backend)) e também aos mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) e a lista dos registros (filtros, detalhes com os hashes, relatório e download) funcionam contra os mocks. Na captura, o formulário de Novo Registro (com custo e saldo) abre o navegador remoto simulado (abrindo, site fora do ar e pronto), com captura de tela, gravação com cronômetro, conclusão (diálogo com o número do registro e "Ver registro"), falha ("Tentar novamente") e cancelamento (ver [Rotas](#rotas) e o [planejamento](docs/planejamento/telas-captura-e-registros.md)).
 >
-> O que foi entregue em cada sprint está em [`docs/sprints/`](docs/sprints/): [Sprint 1](docs/sprints/sprint-1.md).
+> O que foi entregue em cada sprint está em [`docs/sprints/`](docs/sprints/): [Sprint 1](docs/sprints/sprint-1.md), [Sprint 2](docs/sprints/sprint-2.md).
 
 ## Stack
 
