@@ -6,7 +6,7 @@ Este repositório contém **a base do frontend**: ambiente, ferramentas e infrae
 
 Requisitos, ADRs e táticas arquiteturais estão em [`iuryyxd/MATA62-Veridt`](https://github.com/iuryyxd/MATA62-Veridt). As telas finais vêm do [Figma do Veridt](https://www.figma.com/design/D4vDhuk1DBAJY9knexl7Hs/Veridt?node-id=0-1); o tema foi centralizado em `src/index.css` para facilitar a troca.
 
-> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação e redefinição de senha, logout) ligado ao backend real (branch `desenv`, ver [Integração com o backend](#integração-com-o-backend)) e também aos mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) e a lista dos registros (filtros, detalhes com os hashes, relatório e download) funcionam contra os mocks. Na captura, o formulário de Novo Registro (com custo e saldo) já abre uma sessão simulada; a tela da sessão ao vivo ainda é o esqueleto (ver [Rotas](#rotas) e o [planejamento](docs/planejamento/telas-captura-e-registros.md)).
+> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação e redefinição de senha, logout) ligado ao backend real (branch `desenv`, ver [Integração com o backend](#integração-com-o-backend)) e também aos mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) e a lista dos registros (filtros, detalhes com os hashes, relatório e download) funcionam contra os mocks. Na captura, o formulário de Novo Registro (com custo e saldo) abre o navegador remoto simulado, com os estados de abrindo, site fora do ar e pronto; gravação, capturas de tela e conclusão ainda faltam (ver [Rotas](#rotas) e o [planejamento](docs/planejamento/telas-captura-e-registros.md)).
 >
 > O que foi entregue em cada sprint está em [`docs/sprints/`](docs/sprints/): [Sprint 1](docs/sprints/sprint-1.md).
 
@@ -69,7 +69,7 @@ Nos mocks, o pagamento é aprovado sozinho 6 s depois de criado e os créditos e
 ## Captura (REQ 08 a 11)
 
 - **Novo Registro** (`/capturas/nova`): título e URL do site (com `http://` ou `https://`), o custo do registro e o saldo. Sem saldo, um aviso leva para "Comprar créditos" e o botão "Iniciar Registro" fica desativado; quando o backend não informa o saldo, a resposta 402 `SALDO_INSUFICIENTE` mostra o mesmo aviso. Ao iniciar, o app abre `/capturas/{id}/sessao`.
-- **Sessão ao vivo** (`/capturas/{id}/sessao`): por enquanto o esqueleto do `RemoteBrowserView`, já ligado ao WebSocket simulado.
+- **Sessão ao vivo** (`/capturas/{id}/sessao`): a mesma tela do Figma, com o título e a URL bloqueados e o navegador remoto (`RemoteBrowserView`) ligado ao WebSocket. Enquanto o site abre, uma cobertura avisa e os botões ficam desativados; se o site não abrir, o aviso diz que nada foi cobrado e oferece "Tentar novamente" (nova sessão, no lugar da que falhou) ou "Alterar endereço" (volta ao formulário preenchido). Com o site aberto, o canvas repassa mouse, rolagem e teclado. Se a conexão cair, o app avisa e reconecta sozinho. O endereço retoma a sessão ao recarregar a página (com o backend real; nos mocks, recarregar apaga a sessão). Gravação e capturas de tela: tasks C4 e C5.
 
 ### Contrato provisório de captura
 
@@ -195,21 +195,21 @@ Com o backend em `http://localhost:8080` e `VITE_ENABLE_MOCKS=false`, rode `pnpm
 
 ## Rotas
 
-| Rota                               | Tela                                               | Acesso      | Estado                          |
-| ---------------------------------- | -------------------------------------------------- | ----------- | ------------------------------- |
-| `/login`                           | Login                                              | pública     | pronta                          |
-| `/cadastro`                        | Cadastro (advogado ou usuário comum)               | pública     | pronta                          |
-| `/recuperar-senha`                 | Solicitar recuperação de senha                     | pública     | pronta                          |
-| `/redefinir-senha?token=`          | Nova senha (link do e-mail do backend)             | pública¹    | pronta                          |
-| `/`                                | Redireciona para `/registros`                      | autenticada | pronta                          |
-| `/creditos`                        | Compra: pacotes, faturamento e pagamento           | autenticada | pronta (mocks)                  |
-| `/creditos/checkout/:pacoteId`     | A mesma tela, com o pacote já escolhido            | autenticada | pronta (mocks)                  |
-| `/creditos/pagamento/:pagamentoId` | Status do pagamento (retorno do Mercado Pago, Pix) | autenticada | pronta (mocks)                  |
-| `/capturas/nova`                   | Novo registro: título, URL, custo e saldo          | autenticada | pronta (mocks)                  |
-| `/capturas/:id/sessao`             | Navegador remoto ao vivo                           | autenticada | esqueleto (`RemoteBrowserView`) |
-| `/registros`                       | Lista: busca, filtros e paginação na URL           | autenticada | pronta (mocks)                  |
-| `/registros/:id`                   | A lista com o painel de detalhes, relatório e ZIP  | autenticada | pronta (mocks)                  |
-| `*`                                | 404                                                | —           | pronta                          |
+| Rota                               | Tela                                               | Acesso      | Estado                         |
+| ---------------------------------- | -------------------------------------------------- | ----------- | ------------------------------ |
+| `/login`                           | Login                                              | pública     | pronta                         |
+| `/cadastro`                        | Cadastro (advogado ou usuário comum)               | pública     | pronta                         |
+| `/recuperar-senha`                 | Solicitar recuperação de senha                     | pública     | pronta                         |
+| `/redefinir-senha?token=`          | Nova senha (link do e-mail do backend)             | pública¹    | pronta                         |
+| `/`                                | Redireciona para `/registros`                      | autenticada | pronta                         |
+| `/creditos`                        | Compra: pacotes, faturamento e pagamento           | autenticada | pronta (mocks)                 |
+| `/creditos/checkout/:pacoteId`     | A mesma tela, com o pacote já escolhido            | autenticada | pronta (mocks)                 |
+| `/creditos/pagamento/:pagamentoId` | Status do pagamento (retorno do Mercado Pago, Pix) | autenticada | pronta (mocks)                 |
+| `/capturas/nova`                   | Novo registro: título, URL, custo e saldo          | autenticada | pronta (mocks)                 |
+| `/capturas/:id/sessao`             | Navegador remoto ao vivo                           | autenticada | abrindo, erro e pronto (mocks) |
+| `/registros`                       | Lista: busca, filtros e paginação na URL           | autenticada | pronta (mocks)                 |
+| `/registros/:id`                   | A lista com o painel de detalhes, relatório e ZIP  | autenticada | pronta (mocks)                 |
+| `*`                                | 404                                                | —           | pronta                         |
 
 - ¹ `/redefinir-senha` abre mesmo com sessão ativa, porque o link chega por e-mail. Redefinir a senha encerra todas as sessões do usuário no backend.
 - As rotas autenticadas ficam sob o `RequireAuth`, que consulta `GET /api/me`. Sem sessão (401), ele redireciona para `/login?redirect=<rota>`.
@@ -337,7 +337,7 @@ src/
       api/                # endpoints.ts, types.ts, capture.ts (preço, sessão, captura de tela, gravação)
       components/         # CaptureCostNotice, RemoteBrowserView
       hooks/              # useCaptureSocket (WebSocket da sessão, com reconexão)
-      pages/              # NewCapturePage (+ testes), CaptureSessionPage (esqueleto)
+      pages/              # NewCapturePage, CaptureSessionPage (+ testes)
       schemas/            # título e URL (Zod)
       types.ts            # protocolo do WebSocket
     records/              # módulo records (REQ 12–15)

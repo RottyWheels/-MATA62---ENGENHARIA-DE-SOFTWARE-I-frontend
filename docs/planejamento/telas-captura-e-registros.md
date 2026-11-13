@@ -7,7 +7,7 @@ Telas que faltam no frontend depois da sprint 1. O backend ainda não tem os mó
 - Figma do Veridt: frames "Criar Novo Registro" (3 estados), "Lista dos Registros" e "Lista dos Registros - Detalhes".
 - Canvas com os estados que faltam no Figma (proposta, a validar com quem cuida do design): [Veridt — Captura e Registros](https://claude.ai/artifact/SKFcazv49CfXqTM6x7FoyN). Cada task cita o quadro (board) correspondente.
 
-**Andamento:** R1 a R4, C1 e C2 concluídas, com testes. Próxima: C3 (combinar antes o contrato do navegador remoto com o backend).
+**Andamento:** R1 a R4 e C1 a C3 concluídas, com testes. Próxima: C4. O contrato do navegador remoto (C1) continua provisório: validar com o backend.
 
 **Ordem:** registros primeiro (R1 a R4), porque têm o desenho mais completo e não dependem do navegador remoto; depois captura (C1 a C5); por fim a documentação e o teste de ponta a ponta (X1).
 
@@ -73,7 +73,7 @@ Telas que faltam no frontend depois da sprint 1. O backend ainda não tem os mó
 - Sem saldo: um aviso com "Comprar créditos" e o botão "Iniciar Registro" desativado.
 - **Pronto quando:** a validação e o caso sem saldo têm testes.
 
-### C3. Navegador remoto na mesma página
+### C3. Navegador remoto na mesma página ✅
 
 - Quadros: `Captura-Carregando`, `Captura-ErroSite`; Figma "Criar Novo Registro" com o navegador.
 - Depois de "Iniciar Registro", a mesma página mostra os campos bloqueados, os botões e o `RemoteBrowserView` ligado ao socket.
