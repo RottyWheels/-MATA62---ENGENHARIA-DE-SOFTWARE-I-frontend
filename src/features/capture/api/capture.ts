@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback } from 'react'
 
 import { getMeQueryKey } from '@/features/auth'
 import { getRecordsQueryKey } from '@/features/records'
@@ -95,5 +96,38 @@ export function useCancelCapture() {
   return useMutation<void, CaptureError, string>({
     mutationFn: postCancel,
     onSuccess: (_, id) => queryClient.invalidateQueries({ queryKey: getCaptureQueryKey(id) }),
+  })
+}
+
+/** Atualiza a sessão no cache sem nova consulta (respostas e mensagens do socket). */
+export function useUpdateCaptureCache(id: string | undefined) {
+  const queryClient = useQueryClient()
+  return useCallback(
+    (update: (capture: Capture) => Capture) => {
+      if (!id) return
+      queryClient.setQueryData<Capture>(getCaptureQueryKey(id), (current) =>
+        current ? update(current) : current,
+      )
+    },
+    [id, queryClient],
+  )
+}
+
+/** "Capturar Tela": a captura entra na lista da sessão assim que o backend confirma. */
+export function useCaptureScreenshot(id: string) {
+  const update = useUpdateCaptureCache(id)
+  return useMutation<CaptureScreenshot, CaptureError, void>({
+    mutationFn: () => postScreenshot(id),
+    onSuccess: (screenshot) =>
+      update((capture) => ({ ...capture, screenshots: [...capture.screenshots, screenshot] })),
+  })
+}
+
+/** "Iniciar Gravação" e "Concluir gravação". */
+export function useCaptureRecording(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation<Capture, CaptureError, 'start' | 'stop'>({
+    mutationFn: (action) => (action === 'start' ? postRecordingStart(id) : postRecordingStop(id)),
+    onSuccess: (capture) => queryClient.setQueryData(getCaptureQueryKey(id), capture),
   })
 }

@@ -1,10 +1,10 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { openMockSite, setMockAutoLoad } from '@/mocks/handlers/capture'
 import { http } from '@/shared/api/http'
 import { renderRoutes } from '@/test/render'
-import { loginAsDemo } from '@/test/session'
+import { loginAsDemo, sessionBalance } from '@/test/session'
 
 import { CaptureSessionPage } from './CaptureSessionPage'
 import { NewCapturePage } from './NewCapturePage'
@@ -100,5 +100,89 @@ describe('CaptureSessionPage', () => {
       'href',
       '/capturas/nova',
     )
+  })
+})
+
+describe('CaptureSessionPage: gravação e capturas de tela', () => {
+  const READY = 'O site abriu. Você já pode capturar a tela ou iniciar a gravação.'
+
+  async function openSession() {
+    const id = await startCapture()
+    const rendered = renderRoutes(routes, `/capturas/${id}/sessao`)
+    await waitFor(() => expect(announcement()).toBe(READY))
+    return { id, ...rendered }
+  }
+
+  it('"Concluir registro" pede ao menos uma captura ou gravação', async () => {
+    await openSession()
+
+    expect(screen.getByRole('button', { name: 'Concluir registro' })).toBeDisabled()
+    expect(
+      screen.getByText('Capture ao menos uma tela ou grave um vídeo para concluir o registro.'),
+    ).toBeInTheDocument()
+  })
+
+  it('captura a tela, grava, para a gravação e conclui', async () => {
+    const { user } = await openSession()
+    const before = await sessionBalance()
+
+    await user.click(screen.getByRole('button', { name: 'Capturar Tela' }))
+    const strip = await screen.findByRole('region', { name: 'Capturas desta sessão (1)' })
+    expect(within(strip).getByText('captura-01.png')).toBeInTheDocument()
+    expect(
+      within(strip).getByRole('img', { name: 'Miniatura de captura-01.png' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Concluir registro' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Iniciar Gravação' }))
+    await waitFor(() => expect(announcement()).toBe('Gravando a navegação.'))
+    expect(screen.getByText('Gravando')).toBeInTheDocument()
+    expect(screen.getByText(/^\d{2}:\d{2}$/)).toBeInTheDocument()
+    // Dá para capturar a tela durante a gravação.
+    await user.click(screen.getByRole('button', { name: 'Capturar Tela' }))
+    expect(
+      await screen.findByRole('region', { name: 'Capturas desta sessão (2)' }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Concluir gravação' }))
+    await waitFor(() => expect(announcement()).toBe(READY))
+    expect(screen.queryByText('Gravando')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Concluir registro' }))
+
+    await waitFor(() => expect(announcement()).toBe('Registro enviado para processamento.'))
+    expect(await sessionBalance()).toBe((before ?? 0) - 1)
+    const { data } = await http.get<{ content: Array<{ title: string; status: string }> }>(
+      '/records',
+      { params: { size: 1 } },
+    )
+    expect(data.content[0]).toMatchObject({ title: 'Anúncio do imóvel', status: 'PROCESSANDO' })
+  })
+
+  it('cancelar pede confirmação e não cobra nada', async () => {
+    const { user } = await openSession()
+    const before = await sessionBalance()
+    await user.click(screen.getByRole('button', { name: 'Capturar Tela' }))
+    await screen.findByRole('region', { name: 'Capturas desta sessão (1)' })
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar registro' }))
+    const dialog = await screen.findByRole('alertdialog', { name: 'Cancelar este registro?' })
+    expect(within(dialog).getByText(/Nenhum crédito será cobrado/)).toBeInTheDocument()
+
+    // Desistir mantém a sessão como estava.
+    await user.click(within(dialog).getByRole('button', { name: 'Continuar registrando' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(announcement()).toBe(READY)
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar registro' }))
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Cancelar registro',
+      }),
+    )
+
+    await waitFor(() => expect(announcement()).toBe('Registro cancelado.'))
+    expect(await sessionBalance()).toBe(before)
+    expect(screen.queryByRole('button', { name: 'Concluir registro' })).not.toBeInTheDocument()
   })
 })

@@ -1,6 +1,6 @@
 import { isAxiosError } from 'axios'
-import type { ReactNode } from 'react'
 import { CircleAlertIcon, LoaderCircleIcon, WifiOffIcon } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 
@@ -12,9 +12,21 @@ import { Input } from '@/shared/components/ui/input'
 import { Label } from '@/shared/components/ui/label'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 
-import { useCapture, useCreateCapture } from '../api/capture'
+import {
+  useCancelCapture,
+  useCapture,
+  useCaptureRecording,
+  useCaptureScreenshot,
+  useCreateCapture,
+  useFinishCapture,
+  useUpdateCaptureCache,
+} from '../api/capture'
 import type { Capture } from '../api/types'
+import { CancelCaptureDialog } from '../components/CancelCaptureDialog'
+import { CaptureToolbar } from '../components/CaptureToolbar'
 import { RemoteBrowserView } from '../components/RemoteBrowserView'
+import { ScreenshotStrip } from '../components/ScreenshotStrip'
+import { formatClock } from '../lib/time'
 import { useCaptureSocket } from '../hooks/useCaptureSocket'
 import { isFinalCaptureStatus, type CaptureStatus } from '../types'
 
@@ -69,11 +81,60 @@ export function CaptureSessionPage() {
     )
   }
 
-  // O WebSocket traz o estado mais recente; antes da primeira mensagem, vale o da API.
-  const status = socket.captureStatus ?? capture.data.status
+  return <LiveSession capture={capture.data} socket={socket} />
+}
+
+type Socket = ReturnType<typeof useCaptureSocket>
+
+/** A sessão carregada: navegador, ações e capturas. */
+function LiveSession({ capture, socket }: { capture: Capture; socket: Socket }) {
+  const updateCache = useUpdateCaptureCache(capture.id)
+  const screenshot = useCaptureScreenshot(capture.id)
+  const recording = useCaptureRecording(capture.id)
+  const finish = useFinishCapture()
+  const cancel = useCancelCapture()
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  // Miniaturas do quadro na tela quando cada captura foi feita (só nesta aba).
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
+
+  // Uma fonte só para o estado: o que chega pelo WebSocket vai para o cache da sessão,
+  // junto com as respostas das ações.
+  useEffect(() => {
+    const status = socket.captureStatus
+    if (status)
+      updateCache((current) => (current.status === status ? current : { ...current, status }))
+  }, [socket.captureStatus, updateCache])
+
+  const status = capture.status
   const live = status === 'READY' || status === 'RECORDING'
   // Caiu a conexão no meio da sessão: o hook tenta reconectar sozinho.
-  const reconnecting = !isFinalCaptureStatus(status) && socket.status !== 'open'
+  const reconnecting = live && socket.status !== 'open'
+
+  const busy = recording.isPending
+    ? recording.variables
+    : screenshot.isPending
+      ? 'screenshot'
+      : finish.isPending
+        ? 'finish'
+        : null
+
+  const fail = (title: string) => (error: unknown) =>
+    toast.error(title, { description: getErrorMessage(error) })
+
+  const takeScreenshot = () => {
+    const frame = socket.lastFrame
+    screenshot.mutate(undefined, {
+      onSuccess: (shot) => {
+        if (frame) {
+          setThumbnails((all) => ({ ...all, [shot.name]: `data:image/jpeg;base64,${frame.data}` }))
+        }
+        toast.success('Tela capturada', {
+          description: `${shot.name} salva às ${formatClock(shot.capturedAt)}. O hash é gerado ao concluir o registro.`,
+        })
+      },
+      onError: fail('Não foi possível capturar a tela'),
+    })
+  }
 
   return (
     <SessionLayout>
@@ -81,21 +142,25 @@ export function CaptureSessionPage() {
         {STATUS_ANNOUNCEMENT[status]}
       </p>
 
-      <LockedFields capture={capture.data} />
+      <LockedFields capture={capture} />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button disabled>Iniciar Gravação</Button>
-        <Button variant="secondary" disabled>
-          Capturar Tela
-        </Button>
-        {status === 'LOADING' && (
-          <span className="ml-1 text-sm text-muted-foreground">
-            Os botões ficam disponíveis assim que o site abrir.
-          </span>
-        )}
-      </div>
+      <CaptureToolbar
+        capture={capture}
+        busy={busy}
+        onStartRecording={() =>
+          recording.mutate('start', { onError: fail('Não foi possível iniciar a gravação') })
+        }
+        onStopRecording={() =>
+          recording.mutate('stop', { onError: fail('Não foi possível concluir a gravação') })
+        }
+        onScreenshot={takeScreenshot}
+        onFinish={() =>
+          finish.mutate(capture.id, { onError: fail('Não foi possível concluir o registro') })
+        }
+        onCancel={() => setConfirmCancel(true)}
+      />
 
-      {reconnecting && live && (
+      {reconnecting && (
         <Alert>
           <WifiOffIcon />
           <AlertTitle>Conexão com o navegador perdida</AlertTitle>
@@ -104,12 +169,29 @@ export function CaptureSessionPage() {
       )}
 
       <RemoteBrowserView
-        url={capture.data.url}
+        url={capture.url}
         frame={socket.lastFrame}
         send={socket.send}
         interactive={live && socket.status === 'open'}
         recording={status === 'RECORDING'}
-        overlay={sessionOverlay(status, capture.data, !!socket.lastFrame)}
+        overlay={sessionOverlay(status, capture, !!socket.lastFrame)}
+      />
+
+      <ScreenshotStrip screenshots={capture.screenshots} thumbnails={thumbnails} />
+
+      <CancelCaptureDialog
+        open={confirmCancel}
+        onOpenChange={setConfirmCancel}
+        pending={cancel.isPending}
+        onConfirm={() =>
+          cancel.mutate(capture.id, {
+            onSuccess: () => {
+              updateCache((current) => ({ ...current, status: 'CANCELED' }))
+              setConfirmCancel(false)
+            },
+            onError: fail('Não foi possível cancelar o registro'),
+          })
+        }
       />
     </SessionLayout>
   )
