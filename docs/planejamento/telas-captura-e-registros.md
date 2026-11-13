@@ -7,7 +7,7 @@ Telas que faltam no frontend depois da sprint 1. O backend ainda não tem os mó
 - Figma do Veridt: frames "Criar Novo Registro" (3 estados), "Lista dos Registros" e "Lista dos Registros - Detalhes".
 - Canvas com os estados que faltam no Figma (proposta, a validar com quem cuida do design): [Veridt — Captura e Registros](https://claude.ai/artifact/SKFcazv49CfXqTM6x7FoyN). Cada task cita o quadro (board) correspondente.
 
-**Andamento:** R1 a R4 e C1 a C3 concluídas, com testes. Próxima: C4. O contrato do navegador remoto (C1) continua provisório: validar com o backend.
+**Andamento:** R1 a R4 e C1 a C4 concluídas, com testes. Próxima: C5. O contrato do navegador remoto (C1) continua provisório: validar com o backend.
 
 **Ordem:** registros primeiro (R1 a R4), porque têm o desenho mais completo e não dependem do navegador remoto; depois captura (C1 a C5); por fim a documentação e o teste de ponta a ponta (X1).
 
@@ -81,7 +81,7 @@ Telas que faltam no frontend depois da sprint 1. O backend ainda não tem os mó
 - Estados de abrindo o site, erro ("Tentar novamente" ou "Alterar endereço") e pronto.
 - **Pronto quando:** os três estados funcionam com o mock.
 
-### C4. Gravação e capturas de tela
+### C4. Gravação e capturas de tela ✅
 
 - Quadros: `Captura-Gravando`, `Captura-TelaCapturada`; Figma "Criar Novo Registro" (gravando).
 - "Iniciar Gravação" vira "Concluir gravação", com o selo "Gravando" e o cronômetro.

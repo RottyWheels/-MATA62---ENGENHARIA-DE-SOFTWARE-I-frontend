@@ -6,7 +6,7 @@ Este repositório contém **a base do frontend**: ambiente, ferramentas e infrae
 
 Requisitos, ADRs e táticas arquiteturais estão em [`iuryyxd/MATA62-Veridt`](https://github.com/iuryyxd/MATA62-Veridt). As telas finais vêm do [Figma do Veridt](https://www.figma.com/design/D4vDhuk1DBAJY9knexl7Hs/Veridt?node-id=0-1); o tema foi centralizado em `src/index.css` para facilitar a troca.
 
-> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação e redefinição de senha, logout) ligado ao backend real (branch `desenv`, ver [Integração com o backend](#integração-com-o-backend)) e também aos mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) e a lista dos registros (filtros, detalhes com os hashes, relatório e download) funcionam contra os mocks. Na captura, o formulário de Novo Registro (com custo e saldo) abre o navegador remoto simulado, com os estados de abrindo, site fora do ar e pronto; gravação, capturas de tela e conclusão ainda faltam (ver [Rotas](#rotas) e o [planejamento](docs/planejamento/telas-captura-e-registros.md)).
+> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação e redefinição de senha, logout) ligado ao backend real (branch `desenv`, ver [Integração com o backend](#integração-com-o-backend)) e também aos mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) e a lista dos registros (filtros, detalhes com os hashes, relatório e download) funcionam contra os mocks. Na captura, o formulário de Novo Registro (com custo e saldo) abre o navegador remoto simulado (abrindo, site fora do ar e pronto), com captura de tela, gravação com cronômetro, conclusão e cancelamento; os diálogos de conclusão e de falha ainda faltam (ver [Rotas](#rotas) e o [planejamento](docs/planejamento/telas-captura-e-registros.md)).
 >
 > O que foi entregue em cada sprint está em [`docs/sprints/`](docs/sprints/): [Sprint 1](docs/sprints/sprint-1.md).
 
@@ -69,7 +69,8 @@ Nos mocks, o pagamento é aprovado sozinho 6 s depois de criado e os créditos e
 ## Captura (REQ 08 a 11)
 
 - **Novo Registro** (`/capturas/nova`): título e URL do site (com `http://` ou `https://`), o custo do registro e o saldo. Sem saldo, um aviso leva para "Comprar créditos" e o botão "Iniciar Registro" fica desativado; quando o backend não informa o saldo, a resposta 402 `SALDO_INSUFICIENTE` mostra o mesmo aviso. Ao iniciar, o app abre `/capturas/{id}/sessao`.
-- **Sessão ao vivo** (`/capturas/{id}/sessao`): a mesma tela do Figma, com o título e a URL bloqueados e o navegador remoto (`RemoteBrowserView`) ligado ao WebSocket. Enquanto o site abre, uma cobertura avisa e os botões ficam desativados; se o site não abrir, o aviso diz que nada foi cobrado e oferece "Tentar novamente" (nova sessão, no lugar da que falhou) ou "Alterar endereço" (volta ao formulário preenchido). Com o site aberto, o canvas repassa mouse, rolagem e teclado. Se a conexão cair, o app avisa e reconecta sozinho. O endereço retoma a sessão ao recarregar a página (com o backend real; nos mocks, recarregar apaga a sessão). Gravação e capturas de tela: tasks C4 e C5.
+- **Sessão ao vivo** (`/capturas/{id}/sessao`): a mesma tela do Figma, com o título e a URL bloqueados e o navegador remoto (`RemoteBrowserView`) ligado ao WebSocket. Enquanto o site abre, uma cobertura avisa e os botões ficam desativados; se o site não abrir, o aviso diz que nada foi cobrado e oferece "Tentar novamente" (nova sessão, no lugar da que falhou) ou "Alterar endereço" (volta ao formulário preenchido). Com o site aberto, o canvas repassa mouse, rolagem e teclado. Se a conexão cair, o app avisa e reconecta sozinho. O endereço retoma a sessão ao recarregar a página (com o backend real; nos mocks, recarregar apaga a sessão).
+- **Gravação e capturas** (Figma "Criar Novo Registro" e o canvas): "Capturar Tela" avisa e acrescenta a captura à faixa "Capturas desta sessão", com uma miniatura do quadro na tela. "Iniciar Gravação" vira "Concluir gravação", com o selo "Gravando", o cronômetro e uma moldura azul no navegador; dá para capturar a tela durante a gravação. "Concluir registro" fica disponível com ao menos uma captura ou gravação (se estiver gravando, conclui a gravação junto) e desconta o crédito. "Cancelar registro" pede confirmação e não cobra nada. Os diálogos de conclusão e de falha são a task C5.
 
 ### Contrato provisório de captura
 
@@ -85,7 +86,7 @@ Nos mocks, o pagamento é aprovado sozinho 6 s depois de criado e os créditos e
 
 O WebSocket `/ws/capture/{id}` manda `{ type: 'status', status }` e `{ type: 'frame', data, width, height }` (JPEG em base64). Status da sessão: `LOADING` (abrindo o site), `READY`, `RECORDING`, `LOAD_FAILED`, `FINISHED`, `FAILED` e `CANCELED`; os quatro últimos encerram a sessão e o socket não reconecta. O crédito só é descontado em `/finish`, que cria o registro em `PROCESSANDO`; falha, site fora do ar ou cancelamento não cobram nada.
 
-Nos mocks, o site "abre" em 0,8 s e os quadros são desenhados com `OffscreenCanvas` (no jsdom, um JPEG de 1×1). Uma URL com `nao-abre` simula um site fora do ar.
+Nos mocks, o site "abre" em 0,8 s e os quadros são desenhados com `OffscreenCanvas` (no jsdom, um JPEG de 1×1); cliques, rolagem e teclado geram um quadro novo, no máximo a cada 250 ms (movimento do mouse não gera). Uma URL com `nao-abre` simula um site fora do ar.
 
 ## Registros (REQ 12 a 15)
 
@@ -335,7 +336,7 @@ src/
       schemas/            # faturamento (Zod)
     capture/              # módulo capture (REQ 08–11)
       api/                # endpoints.ts, types.ts, capture.ts (preço, sessão, captura de tela, gravação)
-      components/         # CaptureCostNotice, RemoteBrowserView
+      components/         # CaptureCostNotice, RemoteBrowserView, CaptureToolbar, RecordingBadge, ScreenshotStrip, CancelCaptureDialog
       hooks/              # useCaptureSocket (WebSocket da sessão, com reconexão)
       pages/              # NewCapturePage, CaptureSessionPage (+ testes)
       schemas/            # título e URL (Zod)
