@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { openMockSite, setMockAutoLoad } from '@/mocks/handlers/capture'
+import { failMockCapture, openMockSite, setMockAutoLoad } from '@/mocks/handlers/capture'
 import { http } from '@/shared/api/http'
 import { renderRoutes } from '@/test/render'
 import { loginAsDemo, sessionBalance } from '@/test/session'
@@ -150,17 +150,69 @@ describe('CaptureSessionPage: gravação e capturas de tela', () => {
 
     await user.click(screen.getByRole('button', { name: 'Concluir registro' }))
 
-    await waitFor(() => expect(announcement()).toBe('Registro enviado para processamento.'))
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Registro enviado para processamento',
+    })
+    expect(within(dialog).getByText('2 imagens e 1 vídeo')).toBeInTheDocument()
+    // O saldo é atualizado logo depois de concluir (a consulta `['me']` é refeita).
+    expect(await within(dialog).findByText(`1 (saldo: ${(before ?? 0) - 1})`)).toBeInTheDocument()
     expect(await sessionBalance()).toBe((before ?? 0) - 1)
     const { data } = await http.get<{ content: Array<{ title: string; status: string }> }>(
       '/records',
       { params: { size: 1 } },
     )
-    expect(data.content[0]).toMatchObject({ title: 'Anúncio do imóvel', status: 'PROCESSANDO' })
+    const [record] = data.content as Array<{ id: string; title: string; status: string }>
+    expect(record).toMatchObject({ title: 'Anúncio do imóvel', status: 'PROCESSANDO' })
+    expect(within(dialog).getByText(`#${record!.id}`)).toBeInTheDocument()
+    expect(within(dialog).getByRole('link', { name: 'Ver registro' })).toHaveAttribute(
+      'href',
+      `/registros/${record!.id}`,
+    )
+    expect(within(dialog).getByRole('link', { name: 'Novo registro' })).toHaveAttribute(
+      'href',
+      '/capturas/nova',
+    )
+  })
+
+  it('falha durante a sessão: avisa que nada foi cobrado e tenta de novo', async () => {
+    const { id, user, router } = await openSession()
+    const before = await sessionBalance()
+    await user.click(screen.getByRole('button', { name: 'Iniciar Gravação' }))
+    await waitFor(() => expect(announcement()).toBe('Gravando a navegação.'))
+
+    failMockCapture(id)
+
+    const dialog = await screen.findByRole('alertdialog', { name: 'A captura falhou' })
+    expect(within(dialog).getByText('Nenhum crédito foi cobrado.')).toBeInTheDocument()
+    expect(within(dialog).getByRole('link', { name: 'Voltar para a lista' })).toHaveAttribute(
+      'href',
+      '/registros',
+    )
+    expect(await sessionBalance()).toBe(before)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Tentar novamente' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/capturas/cap-2/sessao'))
+    expect(router.state.historyAction).toBe('REPLACE')
+    // A sessão nova começa do zero: nada herdado da que falhou.
+    await waitFor(() => expect(announcement()).toBe(READY))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Iniciar Gravação' })).toBeEnabled()
+  })
+
+  it('fechar o diálogo deixa o aviso por cima do navegador', async () => {
+    const { id, user } = await openSession()
+    failMockCapture(id)
+    await screen.findByRole('alertdialog', { name: 'A captura falhou' })
+
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('link', { name: 'Ver a lista dos registros' })).toBeInTheDocument()
   })
 
   it('cancelar pede confirmação e não cobra nada', async () => {
-    const { user } = await openSession()
+    const { user, router } = await openSession()
     const before = await sessionBalance()
     await user.click(screen.getByRole('button', { name: 'Capturar Tela' }))
     await screen.findByRole('region', { name: 'Capturas desta sessão (1)' })
@@ -181,8 +233,9 @@ describe('CaptureSessionPage: gravação e capturas de tela', () => {
       }),
     )
 
-    await waitFor(() => expect(announcement()).toBe('Registro cancelado.'))
+    // Cancelado: volta ao formulário, no lugar da sessão (o voltar não reabre a sessão).
+    await waitFor(() => expect(router.state.location.pathname).toBe('/capturas/nova'))
+    expect(router.state.historyAction).toBe('REPLACE')
     expect(await sessionBalance()).toBe(before)
-    expect(screen.queryByRole('button', { name: 'Concluir registro' })).not.toBeInTheDocument()
   })
 })

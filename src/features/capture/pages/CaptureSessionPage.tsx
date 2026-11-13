@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 
+import { useMe } from '@/features/auth'
 import { getErrorMessage } from '@/shared/api/problem-detail'
 import { PageHeader } from '@/shared/components/page/PageHeader'
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert'
@@ -17,17 +18,19 @@ import {
   useCapture,
   useCaptureRecording,
   useCaptureScreenshot,
-  useCreateCapture,
   useFinishCapture,
   useUpdateCaptureCache,
 } from '../api/capture'
 import type { Capture } from '../api/types'
 import { CancelCaptureDialog } from '../components/CancelCaptureDialog'
+import { CaptureFailedDialog } from '../components/CaptureFailedDialog'
+import { CaptureFinishedDialog } from '../components/CaptureFinishedDialog'
 import { CaptureToolbar } from '../components/CaptureToolbar'
 import { RemoteBrowserView } from '../components/RemoteBrowserView'
 import { ScreenshotStrip } from '../components/ScreenshotStrip'
 import { formatClock } from '../lib/time'
 import { useCaptureSocket } from '../hooks/useCaptureSocket'
+import { useRetryCapture } from '../hooks/useRetryCapture'
 import { isFinalCaptureStatus, type CaptureStatus } from '../types'
 
 /** Texto lido por leitores de tela quando o estado da sessão muda. */
@@ -37,7 +40,7 @@ const STATUS_ANNOUNCEMENT: Record<CaptureStatus, string> = {
   RECORDING: 'Gravando a navegação.',
   LOAD_FAILED: 'Não foi possível abrir o site.',
   FINISHED: 'Registro enviado para processamento.',
-  FAILED: 'A sessão de captura falhou.',
+  FAILED: 'A captura falhou.',
   CANCELED: 'Registro cancelado.',
 }
 
@@ -47,6 +50,12 @@ const STATUS_ANNOUNCEMENT: Record<CaptureStatus, string> = {
  */
 export function CaptureSessionPage() {
   const { id } = useParams()
+  // "Tentar novamente" troca só o id na mesma rota: a chave remonta a sessão inteira
+  // (WebSocket, quadro, diálogos, miniaturas), sem herdar nada da sessão anterior.
+  return <CaptureSession key={id} id={id} />
+}
+
+function CaptureSession({ id }: { id: string | undefined }) {
   const capture = useCapture(id)
   const socket = useCaptureSocket(id)
 
@@ -94,6 +103,11 @@ function LiveSession({ capture, socket }: { capture: Capture; socket: Socket }) 
   const finish = useFinishCapture()
   const cancel = useCancelCapture()
   const [confirmCancel, setConfirmCancel] = useState(false)
+  const navigate = useNavigate()
+  const me = useMe()
+  const { retry, pending: retrying } = useRetryCapture(capture)
+  // Fechar o diálogo de conclusão ou de falha deixa o aviso por cima do navegador.
+  const [dismissed, setDismissed] = useState<CaptureStatus | null>(null)
   // Miniaturas do quadro na tela quando cada captura foi feita (só nesta aba).
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
 
@@ -155,7 +169,12 @@ function LiveSession({ capture, socket }: { capture: Capture; socket: Socket }) 
         }
         onScreenshot={takeScreenshot}
         onFinish={() =>
-          finish.mutate(capture.id, { onError: fail('Não foi possível concluir o registro') })
+          finish.mutate(capture.id, {
+            // O número do registro já vem na resposta: o diálogo não espera a nova consulta.
+            onSuccess: ({ recordId }) =>
+              updateCache((current) => ({ ...current, recordId, status: 'FINISHED' })),
+            onError: fail('Não foi possível concluir o registro'),
+          })
         }
         onCancel={() => setConfirmCancel(true)}
       />
@@ -179,6 +198,19 @@ function LiveSession({ capture, socket }: { capture: Capture; socket: Socket }) 
 
       <ScreenshotStrip screenshots={capture.screenshots} thumbnails={thumbnails} />
 
+      <CaptureFinishedDialog
+        capture={capture}
+        open={status === 'FINISHED' && dismissed !== 'FINISHED'}
+        onOpenChange={(open) => !open && setDismissed('FINISHED')}
+        balance={me.data?.creditBalance}
+      />
+      <CaptureFailedDialog
+        open={status === 'FAILED' && dismissed !== 'FAILED'}
+        onOpenChange={(open) => !open && setDismissed('FAILED')}
+        onRetry={() => void retry()}
+        retrying={retrying}
+      />
+
       <CancelCaptureDialog
         open={confirmCancel}
         onOpenChange={setConfirmCancel}
@@ -188,6 +220,8 @@ function LiveSession({ capture, socket }: { capture: Capture; socket: Socket }) 
             onSuccess: () => {
               updateCache((current) => ({ ...current, status: 'CANCELED' }))
               setConfirmCancel(false)
+              toast.success('Registro cancelado', { description: 'Nenhum crédito foi cobrado.' })
+              void navigate('/capturas/nova', { replace: true })
             },
             onError: fail('Não foi possível cancelar o registro'),
           })
@@ -258,16 +292,7 @@ function sessionOverlay(status: CaptureStatus, capture: Capture, hasFrame: boole
 /** Site fora do ar: nada foi cobrado; dá para tentar de novo ou trocar o endereço. */
 function LoadFailed({ capture }: { capture: Capture }) {
   const navigate = useNavigate()
-  const create = useCreateCapture()
-
-  const retry = async () => {
-    try {
-      const next = await create.mutateAsync({ title: capture.title, url: capture.url })
-      await navigate(`/capturas/${next.id}/sessao`, { replace: true })
-    } catch (error) {
-      toast.error('Não foi possível tentar de novo', { description: getErrorMessage(error) })
-    }
-  }
+  const { retry, pending } = useRetryCapture(capture)
 
   return (
     <>
@@ -278,8 +303,8 @@ function LoadFailed({ capture }: { capture: Capture }) {
         foi consumido.
       </p>
       <div className="mt-1 flex flex-wrap justify-center gap-2">
-        <Button onClick={() => void retry()} disabled={create.isPending}>
-          {create.isPending ? 'Abrindo…' : 'Tentar novamente'}
+        <Button onClick={() => void retry()} disabled={pending}>
+          {pending ? 'Abrindo…' : 'Tentar novamente'}
         </Button>
         <Button
           variant="secondary"

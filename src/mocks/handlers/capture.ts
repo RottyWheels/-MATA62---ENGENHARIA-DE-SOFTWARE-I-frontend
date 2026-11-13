@@ -17,7 +17,8 @@ import { addMockRecord } from './records'
  * Backend de captura em memória: a sessão abre o "site" depois de
  * {@link MOCK_LOAD_MS}, manda quadros pelo WebSocket e, ao concluir, desconta o
  * crédito e cria um registro em processamento. Um endereço com `nao-abre` simula
- * um site fora do ar (`LOAD_FAILED`).
+ * um site fora do ar (`LOAD_FAILED`); com `falha-gravacao`, a sessão falha 3 s
+ * depois de começar a gravar (`FAILED`).
  */
 
 /** Créditos por registro nos mocks. */
@@ -263,6 +264,8 @@ export const captureHandlers = [
     if (capture.status !== 'READY') return unavailable('A gravação só começa com o site aberto.')
     capture.recordingStartedAt = new Date().toISOString()
     setStatus(capture, 'RECORDING')
+    // Demonstração da falha: um endereço com `falha-gravacao` cai durante a gravação.
+    if (capture.url.includes('falha-gravacao')) later(3_000, () => failMockCapture(capture.id))
     return HttpResponse.json(toCapture(capture))
   }),
 
