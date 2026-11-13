@@ -7,7 +7,7 @@ Telas que faltam no frontend depois da sprint 1. O backend ainda não tem os mó
 - Figma do Veridt: frames "Criar Novo Registro" (3 estados), "Lista dos Registros" e "Lista dos Registros - Detalhes".
 - Canvas com os estados que faltam no Figma (proposta, a validar com quem cuida do design): [Veridt — Captura e Registros](https://claude.ai/artifact/SKFcazv49CfXqTM6x7FoyN). Cada task cita o quadro (board) correspondente.
 
-**Andamento:** R1 a R4 concluídas (lista, detalhes, relatório e download, com testes). Próxima: C1.
+**Andamento:** R1 a R4, C1 e C2 concluídas, com testes. Próxima: C3 (combinar antes o contrato do navegador remoto com o backend).
 
 **Ordem:** registros primeiro (R1 a R4), porque têm o desenho mais completo e não dependem do navegador remoto; depois captura (C1 a C5); por fim a documentação e o teste de ponta a ponta (X1).
 
@@ -53,7 +53,7 @@ Telas que faltam no frontend depois da sprint 1. O backend ainda não tem os mó
 
 ## Captura (REQ 08 a 11)
 
-### C1. Contrato provisório e mocks de captura
+### C1. Contrato provisório e mocks de captura ✅
 
 - Endpoints:
   - `POST /api/captures { title, url }` → `{ id, cost }` (402 se não houver crédito);
@@ -65,7 +65,7 @@ Telas que faltam no frontend depois da sprint 1. O backend ainda não tem os mó
 - Mock do WebSocket no MSW (`ws.link`), mandando quadros de uma página de exemplo.
 - **Pronto quando:** o hook `useCaptureSocket` funciona contra o mock nos testes.
 
-### C2. Novo Registro: formulário
+### C2. Novo Registro: formulário ✅
 
 - Quadros: `Main`, `Captura-Validacao`, `Captura-SemSaldo`; Figma "Criar Novo Registro" (estado inicial).
 - Campos "Título do Registro" e "URL do site", com Zod: título obrigatório e URL `http(s)://` válida.

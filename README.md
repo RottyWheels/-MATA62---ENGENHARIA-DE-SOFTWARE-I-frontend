@@ -6,7 +6,7 @@ Este repositório contém **a base do frontend**: ambiente, ferramentas e infrae
 
 Requisitos, ADRs e táticas arquiteturais estão em [`iuryyxd/MATA62-Veridt`](https://github.com/iuryyxd/MATA62-Veridt). As telas finais vêm do [Figma do Veridt](https://www.figma.com/design/D4vDhuk1DBAJY9knexl7Hs/Veridt?node-id=0-1); o tema foi centralizado em `src/index.css` para facilitar a troca.
 
-> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação e redefinição de senha, logout) ligado ao backend real (branch `desenv`, ver [Integração com o backend](#integração-com-o-backend)) e também aos mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) e a lista dos registros (filtros, detalhes com os hashes, relatório e download) funcionam contra os mocks. As telas de captura ainda são placeholders (ver [Rotas](#rotas) e o [planejamento](docs/planejamento/telas-captura-e-registros.md)).
+> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação e redefinição de senha, logout) ligado ao backend real (branch `desenv`, ver [Integração com o backend](#integração-com-o-backend)) e também aos mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) e a lista dos registros (filtros, detalhes com os hashes, relatório e download) funcionam contra os mocks. Na captura, o formulário de Novo Registro (com custo e saldo) já abre uma sessão simulada; a tela da sessão ao vivo ainda é o esqueleto (ver [Rotas](#rotas) e o [planejamento](docs/planejamento/telas-captura-e-registros.md)).
 >
 > O que foi entregue em cada sprint está em [`docs/sprints/`](docs/sprints/): [Sprint 1](docs/sprints/sprint-1.md).
 
@@ -65,6 +65,27 @@ Segue o Figma "Compra Créditos" numa única tela (`PurchasePage`), em vez das t
 Os tipos estão em `src/features/credits/api/types.ts`. Erros de campo do faturamento podem vir como `billing.<campo>` (ex.: `billing.cep`) e aparecem no campo correspondente.
 
 Nos mocks, o pagamento é aprovado sozinho 6 s depois de criado e os créditos entram no saldo do usuário simulado. O QR Code dos mocks é só ilustrativo, não é um Pix válido.
+
+## Captura (REQ 08 a 11)
+
+- **Novo Registro** (`/capturas/nova`): título e URL do site (com `http://` ou `https://`), o custo do registro e o saldo. Sem saldo, um aviso leva para "Comprar créditos" e o botão "Iniciar Registro" fica desativado; quando o backend não informa o saldo, a resposta 402 `SALDO_INSUFICIENTE` mostra o mesmo aviso. Ao iniciar, o app abre `/capturas/{id}/sessao`.
+- **Sessão ao vivo** (`/capturas/{id}/sessao`): por enquanto o esqueleto do `RemoteBrowserView`, já ligado ao WebSocket simulado.
+
+### Contrato provisório de captura
+
+| Método | Caminho                                        | Corpo            | Resposta                                       |
+| ------ | ---------------------------------------------- | ---------------- | ---------------------------------------------- |
+| `GET`  | `/api/captures/price`                          | —                | 200 `{ creditsPerRecord }`                     |
+| `POST` | `/api/captures`                                | `{ title, url }` | 201 `Capture` / 400 / 402 `SALDO_INSUFICIENTE` |
+| `GET`  | `/api/captures/{id}`                           | —                | 200 `Capture` / 404                            |
+| `POST` | `/api/captures/{id}/screenshots`               | —                | 201 `{ name, capturedAt }` / 409               |
+| `POST` | `/api/captures/{id}/recording/start` e `/stop` | —                | 200 `Capture` / 409                            |
+| `POST` | `/api/captures/{id}/finish`                    | —                | 200 `{ recordId }` / 409 / 402                 |
+| `POST` | `/api/captures/{id}/cancel`                    | —                | 204 / 409                                      |
+
+O WebSocket `/ws/capture/{id}` manda `{ type: 'status', status }` e `{ type: 'frame', data, width, height }` (JPEG em base64). Status da sessão: `LOADING` (abrindo o site), `READY`, `RECORDING`, `LOAD_FAILED`, `FINISHED`, `FAILED` e `CANCELED`; os quatro últimos encerram a sessão e o socket não reconecta. O crédito só é descontado em `/finish`, que cria o registro em `PROCESSANDO`; falha, site fora do ar ou cancelamento não cobram nada.
+
+Nos mocks, o site "abre" em 0,8 s e os quadros são desenhados com `OffscreenCanvas` (no jsdom, um JPEG de 1×1). Uma URL com `nao-abre` simula um site fora do ar.
 
 ## Registros (REQ 12 a 15)
 
@@ -184,7 +205,7 @@ Com o backend em `http://localhost:8080` e `VITE_ENABLE_MOCKS=false`, rode `pnpm
 | `/creditos`                        | Compra: pacotes, faturamento e pagamento           | autenticada | pronta (mocks)                  |
 | `/creditos/checkout/:pacoteId`     | A mesma tela, com o pacote já escolhido            | autenticada | pronta (mocks)                  |
 | `/creditos/pagamento/:pagamentoId` | Status do pagamento (retorno do Mercado Pago, Pix) | autenticada | pronta (mocks)                  |
-| `/capturas/nova`                   | Novo registro                                      | autenticada | placeholder                     |
+| `/capturas/nova`                   | Novo registro: título, URL, custo e saldo          | autenticada | pronta (mocks)                  |
 | `/capturas/:id/sessao`             | Navegador remoto ao vivo                           | autenticada | esqueleto (`RemoteBrowserView`) |
 | `/registros`                       | Lista: busca, filtros e paginação na URL           | autenticada | pronta (mocks)                  |
 | `/registros/:id`                   | A lista com o painel de detalhes, relatório e ZIP  | autenticada | pronta (mocks)                  |
@@ -237,7 +258,7 @@ pnpm exec playwright install chromium   # só na primeira vez
 pnpm e2e
 ```
 
-- **Vitest** (`jsdom`): setup em `src/test/setup.ts` com `@testing-library/jest-dom` e o servidor MSW (`onUnhandledFrame: 'error'`). Cobre os validadores (CPF, CEP, telefone, OAB/UF), a formatação, o `applyProblemDetailToForm`, o interceptor HTTP, o formulário de cadastro (a OAB só aparece e só é exigida para advogado; o formato `número/UF`; várias inscrições com tipo, repetidas, duas principais e remoção; a política de senha; o corpo enviado à API; erros de campo e conflitos 409 do backend), a redefinição de senha pelo link do e-mail, o login (incluindo o bloqueio de _open redirect_), o `RequireAuth`, o parser do protocolo da captura e a compra de créditos (schema de faturamento, pacote pré-escolhido pela URL, Pix com `Idempotency-Key` e aprovação, Mercado Pago, erros do backend e a tela de status). Como o jsdom não implementa `ResizeObserver` nem as APIs de ponteiro usadas pelo Radix, o setup define stubs mínimos.
+- **Vitest** (`jsdom`): setup em `src/test/setup.ts` com `@testing-library/jest-dom` e o servidor MSW (`onUnhandledFrame: 'error'`). Cobre os validadores (CPF, CEP, telefone, OAB/UF), a formatação, o `applyProblemDetailToForm`, o interceptor HTTP, o formulário de cadastro (a OAB só aparece e só é exigida para advogado; o formato `número/UF`; várias inscrições com tipo, repetidas, duas principais e remoção; a política de senha; o corpo enviado à API; erros de campo e conflitos 409 do backend), a redefinição de senha pelo link do e-mail, o login (incluindo o bloqueio de _open redirect_), o `RequireAuth`, a captura (contrato contra os mocks, `useCaptureSocket` com o WebSocket simulado, o formulário de Novo Registro com custo, saldo, 402 e erros do backend), os registros (API, lista, filtros, paginação, painel, relatório e download) e a compra de créditos (schema de faturamento, pacote pré-escolhido pela URL, Pix com `Idempotency-Key` e aprovação, Mercado Pago, erros do backend e a tela de status). Como o jsdom não implementa `ResizeObserver` nem as APIs de ponteiro usadas pelo Radix, o setup define stubs mínimos.
 - **Playwright** (sobe o app com `VITE_ENABLE_MOCKS=true`): `e2e/smoke.spec.ts` testa rota protegida sem sessão → login com `redirect`, e cadastrar → entrar → layout autenticado (com o saldo e o storage vazio) → sair; `e2e/credits.spec.ts` compra o Pacote Médio com Pix e confere o saldo atualizado.
 
 ## Docker
@@ -312,7 +333,13 @@ src/
       components/         # PackageCards, PixDialog, PixDetails, PaymentStatusBadge
       pages/              # PurchasePage, PaymentStatusPage (+ testes)
       schemas/            # faturamento (Zod)
-    capture/              # módulo capture (REQ 08–11): RemoteBrowserView, useCaptureSocket, types
+    capture/              # módulo capture (REQ 08–11)
+      api/                # endpoints.ts, types.ts, capture.ts (preço, sessão, captura de tela, gravação)
+      components/         # CaptureCostNotice, RemoteBrowserView
+      hooks/              # useCaptureSocket (WebSocket da sessão, com reconexão)
+      pages/              # NewCapturePage (+ testes), CaptureSessionPage (esqueleto)
+      schemas/            # título e URL (Zod)
+      types.ts            # protocolo do WebSocket
     records/              # módulo records (REQ 12–15)
       api/                # endpoints.ts, types.ts, records.ts (hooks, consulta do registro em processamento)
       components/         # RecordsTable, RecordsFilters, RecordsPagination, RecordDetailsSheet, RecordReportDialog
@@ -392,6 +419,6 @@ Já resolvidas no `desenv`: prefixo `/api`, CSRF para SPA (`csrf.spa()` + `GET /
 
 - Abrir o PR do `GET /api/me` no backend e, quando houver OpenAPI, trocar `features/auth/api/` pelo cliente gerado pelo orval.
 - Créditos: ligar ao backend real quando os endpoints existirem e, se o time quiser, preencher o endereço pelo CEP (via backend, para não abrir o `connect-src` da CSP).
-- Telas de captura (REQ 08–11): formulário de novo registro e ligação do `RemoteBrowserView` ao protocolo definitivo.
+- Captura (REQ 09–11): a sessão ao vivo na mesma página do formulário, gravação, capturas de tela, conclusão e falha (tasks C3 a C5 do planejamento).
 - Registros: ligar ao backend quando o módulo `records` existir.
 - Conferir os tokens de `src/index.css` com as variáveis do Figma quando houver acesso de edição.
