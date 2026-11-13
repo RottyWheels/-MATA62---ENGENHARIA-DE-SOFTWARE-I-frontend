@@ -261,7 +261,7 @@ pnpm e2e
 ```
 
 - **Vitest** (`jsdom`): setup em `src/test/setup.ts` com `@testing-library/jest-dom` e o servidor MSW (`onUnhandledFrame: 'error'`). Cobre os validadores (CPF, CEP, telefone, OAB/UF), a formatação, o `applyProblemDetailToForm`, o interceptor HTTP, o formulário de cadastro (a OAB só aparece e só é exigida para advogado; o formato `número/UF`; várias inscrições com tipo, repetidas, duas principais e remoção; a política de senha; o corpo enviado à API; erros de campo e conflitos 409 do backend), a redefinição de senha pelo link do e-mail, o login (incluindo o bloqueio de _open redirect_), o `RequireAuth`, a captura (contrato contra os mocks, `useCaptureSocket` com o WebSocket simulado, o formulário de Novo Registro com custo, saldo, 402 e erros do backend), os registros (API, lista, filtros, paginação, painel, relatório e download) e a compra de créditos (schema de faturamento, pacote pré-escolhido pela URL, Pix com `Idempotency-Key` e aprovação, Mercado Pago, erros do backend e a tela de status). Como o jsdom não implementa `ResizeObserver` nem as APIs de ponteiro usadas pelo Radix, o setup define stubs mínimos.
-- **Playwright** (sobe o app com `VITE_ENABLE_MOCKS=true`): `e2e/smoke.spec.ts` testa rota protegida sem sessão → login com `redirect`, e cadastrar → entrar → layout autenticado (com o saldo e o storage vazio) → sair; `e2e/credits.spec.ts` compra o Pacote Médio com Pix e confere o saldo atualizado.
+- **Playwright** (sobe o app com `VITE_ENABLE_MOCKS=true`): `e2e/smoke.spec.ts` testa rota protegida sem sessão → login com `redirect`, e cadastrar → entrar → layout autenticado (com o saldo e o storage vazio) → sair; `e2e/credits.spec.ts` compra o Pacote Médio com Pix e confere o saldo atualizado; `e2e/capture.spec.ts` faz um registro do começo ao fim (novo registro → site aberto → captura de tela → gravação → concluir → diálogo → painel do registro → lista) e o caso do site fora do ar (nada cobrado, volta ao formulário preenchido); `e2e/mobile.spec.ts` percorre login, lista, detalhes, novo registro, sessão e compra em 375 px e falha se alguma tela rolar para o lado; `e2e/keyboard.spec.ts` abre o painel de detalhes com Enter e confere que o foco entra no painel e volta para o link ao fechar.
 
 ## Docker
 
@@ -404,6 +404,8 @@ Registradas porque a especificação original conflitava com as versões atuais 
 18. **CPF digitado no faturamento:** o Figma mostra o CPF já preenchido, mas o backend não devolve o CPF em nenhuma resposta, de propósito. O campo fica editável.
 19. **Estado como seletor:** o Figma desenha "Estado" como campo de texto; o app usa um seletor com as 27 UFs, para garantir uma sigla válida.
 20. **Formato de erro do backend:** o tipo `ProblemDetail` do frontend ganhou `code` e `message`, e a mensagem geral passou a ser `message ?? detail ?? title`. O nome do tipo ficou, para não espalhar a mudança; ele descreve o erro da API, seja `ErrorResponse` ou RFC 9457.
+21. **Lista e detalhes numa rota só:** `registros/:id?`, com o id opcional. Com duas rotas, abrir e fechar o painel remontava a lista inteira e o foco do teclado se perdia; agora o painel fecha com animação e o foco volta para o "Ver detalhes" de origem.
+22. **Avisos no celular abaixo do topo:** o `Toaster` usa `mobileOffset={{ top: 64 }}`. Na posição padrão, o aviso cobria o botão "Abrir menu" da faixa verde e impedia tocar nele enquanto aparecia (achado pelo E2E em 375 px).
 
 ## Pendências a combinar com o backend
 
