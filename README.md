@@ -6,7 +6,7 @@ Este repositório contém **a base do frontend**: ambiente, ferramentas e infrae
 
 Requisitos, ADRs e táticas arquiteturais estão em [`iuryyxd/MATA62-Veridt`](https://github.com/iuryyxd/MATA62-Veridt). As telas finais vêm do [Figma do Veridt](https://www.figma.com/design/D4vDhuk1DBAJY9knexl7Hs/Veridt?node-id=0-1); o tema foi centralizado em `src/index.css` para facilitar a troca.
 
-> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação e redefinição de senha, logout) ligado ao backend real (branch `desenv`, ver [Integração com o backend](#integração-com-o-backend)) e também aos mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) também funciona contra os mocks. As telas de captura e registros ainda são placeholders (ver [Rotas](#rotas) e [Próximos passos](#próximos-passos)).
+> **Estado atual:** ambiente configurado, rotas e layouts prontos e o fluxo de autenticação (cadastro, login, recuperação e redefinição de senha, logout) ligado ao backend real (branch `desenv`, ver [Integração com o backend](#integração-com-o-backend)) e também aos mocks. O visual segue o Figma (cor `#0F7C69`, telas públicas divididas e barra lateral verde). A compra de créditos (pacotes, faturamento, Pix e Mercado Pago) e a lista dos registros (filtros, detalhes com os hashes, relatório e download) funcionam contra os mocks. As telas de captura ainda são placeholders (ver [Rotas](#rotas) e o [planejamento](docs/planejamento/telas-captura-e-registros.md)).
 >
 > O que foi entregue em cada sprint está em [`docs/sprints/`](docs/sprints/): [Sprint 1](docs/sprints/sprint-1.md).
 
@@ -65,6 +65,25 @@ Segue o Figma "Compra Créditos" numa única tela (`PurchasePage`), em vez das t
 Os tipos estão em `src/features/credits/api/types.ts`. Erros de campo do faturamento podem vir como `billing.<campo>` (ex.: `billing.cep`) e aparecem no campo correspondente.
 
 Nos mocks, o pagamento é aprovado sozinho 6 s depois de criado e os créditos entram no saldo do usuário simulado. O QR Code dos mocks é só ilustrativo, não é um Pix válido.
+
+## Registros (REQ 12 a 15)
+
+Seguem o Figma "Lista dos Registros" e "Lista dos Registros - Detalhes", mais os estados do [canvas de propostas](https://claude.ai/artifact/SKFcazv49CfXqTM6x7FoyN) (busca, filtros, vazio, processando, relatório).
+
+- **Lista** (`/registros`): título com o domínio do site, status com palavra e cor, horários de início e fim. Busca (título ou URL, com espera de 300 ms), filtros de status e período e paginação ficam na URL (`?q=&status=&periodo=&pagina=`), então o link e o botão voltar funcionam. Estados de carregando, vazio ("Fazer o primeiro registro"), sem resultado ("Limpar filtros") e erro ("Tentar novamente").
+- **Detalhes** (`/registros/:id`): painel lateral sobre a lista, como no Figma. Mostra os campos do Figma, o site e o SHA-256 completo de cada arquivo, com "Copiar". Em processamento, consulta o registro a cada 5 s até concluir. Fechar volta para a lista com os mesmos filtros.
+- **Relatório e ZIP**: "Gerar relatório" abre uma prévia do conteúdo do PDF (montada com os dados do registro, porque a CSP não permite exibir um PDF dentro da página) e "Baixar PDF" baixa o arquivo do backend. "Fazer download (.zip)" baixa o pacote. Os dois só ficam disponíveis com o registro concluído.
+
+### Contrato provisório de registros
+
+| Método | Caminho                    | Parâmetros                                                 | Resposta                                     |
+| ------ | -------------------------- | ---------------------------------------------------------- | -------------------------------------------- |
+| `GET`  | `/api/records`             | `page` (desde 0), `size`, `status`, `q`, `from` (ISO 8601) | 200 `Page<RecordSummary>`                    |
+| `GET`  | `/api/records/{id}`        | —                                                          | 200 `RecordDetails` / 404                    |
+| `GET`  | `/api/records/{id}/report` | —                                                          | 200 `application/pdf` / 409 se não concluído |
+| `GET`  | `/api/records/{id}/export` | —                                                          | 200 `application/zip` / 409 se não concluído |
+
+Os tipos estão em `src/features/records/api/types.ts`. Status: `EM_ANDAMENTO`, `PROCESSANDO`, `CONCLUIDO` e `FALHOU`; um registro cancelado não é criado. Nos mocks, só o usuário de demonstração tem registros (25, com um processando que conclui sozinho em 20 s e dois que falharam); contas novas veem a lista vazia.
 
 ## Pré-requisitos
 
@@ -151,7 +170,7 @@ Com o backend em `http://localhost:8080` e `VITE_ENABLE_MOCKS=false`, rode `pnpm
 - **OAB:** cada linha da lista vira uma inscrição `{ number, state, type }` em `oabRegistrations`. A tela aplica as regras do `OabValidator` do backend: ao menos uma para advogado, no máximo 30, sem repetidas (zeros à esquerda contam como o mesmo número) e só uma principal.
 - **Senha:** de 8 a 128 caracteres, com letra, número e símbolo (`PasswordPolicy` do backend). O cadastro e a redefinição validam a mesma regra antes de enviar.
 - **Erros:** o backend responde com `ErrorResponse` (`{ timestamp, status, code, message, errors[{ field, message }] }`), não com `ProblemDetail`. O `applyProblemDetailToForm` aceita os dois formatos. Erros de uma inscrição (`oabRegistrations[1].number`) vão para a linha certa, pelo `resolveField`, e erros sem `errors[]` (409 `EMAIL_JA_CADASTRADO`, `CPF_JA_CADASTRADO`, `OAB_JA_CADASTRADA`) vão para o campo certo pelo `code`.
-- **Créditos, captura e registros** ainda não existem no backend. Com `VITE_ENABLE_MOCKS=false`, a tela de compra mostra erro ao carregar os pacotes.
+- **Créditos, captura e registros** ainda não existem no backend. Com `VITE_ENABLE_MOCKS=false`, a tela de compra mostra erro ao carregar os pacotes e a lista dos registros mostra "Não foi possível carregar os registros".
 
 ## Rotas
 
@@ -167,8 +186,8 @@ Com o backend em `http://localhost:8080` e `VITE_ENABLE_MOCKS=false`, rode `pnpm
 | `/creditos/pagamento/:pagamentoId` | Status do pagamento (retorno do Mercado Pago, Pix) | autenticada | pronta (mocks)                  |
 | `/capturas/nova`                   | Novo registro                                      | autenticada | placeholder                     |
 | `/capturas/:id/sessao`             | Navegador remoto ao vivo                           | autenticada | esqueleto (`RemoteBrowserView`) |
-| `/registros`                       | Lista de registros                                 | autenticada | placeholder com tabela vazia    |
-| `/registros/:id`                   | Detalhes, relatório e ZIP                          | autenticada | placeholder                     |
+| `/registros`                       | Lista: busca, filtros e paginação na URL           | autenticada | pronta (mocks)                  |
+| `/registros/:id`                   | A lista com o painel de detalhes, relatório e ZIP  | autenticada | pronta (mocks)                  |
 | `*`                                | 404                                                | —           | pronta                          |
 
 - ¹ `/redefinir-senha` abre mesmo com sessão ativa, porque o link chega por e-mail. Redefinir a senha encerra todas as sessões do usuário no backend.
@@ -294,7 +313,11 @@ src/
       pages/              # PurchasePage, PaymentStatusPage (+ testes)
       schemas/            # faturamento (Zod)
     capture/              # módulo capture (REQ 08–11): RemoteBrowserView, useCaptureSocket, types
-    records/              # módulo records (REQ 12–15): tabela (TanStack Table) e placeholders
+    records/              # módulo records (REQ 12–15)
+      api/                # endpoints.ts, types.ts, records.ts (hooks, consulta do registro em processamento)
+      components/         # RecordsTable, RecordsFilters, RecordsPagination, RecordDetailsSheet, RecordReportDialog
+      lib/                # filtros na URL, status, paginação, formatação dos detalhes
+      pages/              # RecordsPage (lista + painel)
   shared/
     api/
       http.ts             # instância Axios, interceptores, customInstance (orval)
@@ -370,5 +393,5 @@ Já resolvidas no `desenv`: prefixo `/api`, CSRF para SPA (`csrf.spa()` + `GET /
 - Abrir o PR do `GET /api/me` no backend e, quando houver OpenAPI, trocar `features/auth/api/` pelo cliente gerado pelo orval.
 - Créditos: ligar ao backend real quando os endpoints existirem e, se o time quiser, preencher o endereço pelo CEP (via backend, para não abrir o `connect-src` da CSP).
 - Telas de captura (REQ 08–11): formulário de novo registro e ligação do `RemoteBrowserView` ao protocolo definitivo.
-- Telas de registros (REQ 12–15): listagem real, detalhes, relatório e download do ZIP.
+- Registros: ligar ao backend quando o módulo `records` existir.
 - Conferir os tokens de `src/index.css` com as variáveis do Figma quando houver acesso de edição.

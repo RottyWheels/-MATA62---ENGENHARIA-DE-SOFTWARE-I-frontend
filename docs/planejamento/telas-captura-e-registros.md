@@ -7,11 +7,13 @@ Telas que faltam no frontend depois da sprint 1. O backend ainda não tem os mó
 - Figma do Veridt: frames "Criar Novo Registro" (3 estados), "Lista dos Registros" e "Lista dos Registros - Detalhes".
 - Canvas com os estados que faltam no Figma (proposta, a validar com quem cuida do design): [Veridt — Captura e Registros](https://claude.ai/artifact/SKFcazv49CfXqTM6x7FoyN). Cada task cita o quadro (board) correspondente.
 
+**Andamento:** R1 a R4 concluídas (lista, detalhes, relatório e download, com testes). Próxima: C1.
+
 **Ordem:** registros primeiro (R1 a R4), porque têm o desenho mais completo e não dependem do navegador remoto; depois captura (C1 a C5); por fim a documentação e o teste de ponta a ponta (X1).
 
 ## Registros (REQ 12 a 15)
 
-### R1. Contrato provisório e mocks de registros
+### R1. Contrato provisório e mocks de registros ✅
 
 - Tipos em `features/records/api/types.ts`: `RecordStatus` (`EM_ANDAMENTO`, `PROCESSANDO`, `CONCLUIDO`, `FALHOU`), `RecordSummary`, `RecordDetails` (com a lista de arquivos e o SHA-256 de cada um) e `Page<T>`.
 - Endpoints em `features/records/api/endpoints.ts`:
@@ -23,7 +25,7 @@ Telas que faltam no frontend depois da sprint 1. O backend ainda não tem os mó
 - Handlers MSW com uns 25 registros de exemplo, nos quatro status, com filtro, busca e paginação feitos no mock.
 - **Pronto quando:** os hooks têm testes que passam contra o mock, e o contrato está no README.
 
-### R2. Lista dos registros
+### R2. Lista dos registros ✅
 
 - Quadros: `Registros-Lista`, `Registros-Vazio`.
 - Coluna "Título" (com o domínio do site embaixo), além das colunas do Figma.
@@ -32,7 +34,7 @@ Telas que faltam no frontend depois da sprint 1. O backend ainda não tem os mó
 - Selos de status com palavra e cor, nunca só a cor.
 - **Pronto quando:** a lista funciona com o mock, com testes de filtro, paginação, vazio e erro.
 
-### R3. Painel de detalhes
+### R3. Painel de detalhes ✅
 
 - Quadros: `Registros-Detalhes`, `Registros-DetalhesProcessando`.
 - Painel lateral (`Sheet`) aberto sobre a lista, como no Figma. A rota `/registros/:id` abre a lista com o painel aberto, e fechar o painel volta para `/registros` sem perder os filtros.
@@ -41,7 +43,7 @@ Telas que faltam no frontend depois da sprint 1. O backend ainda não tem os mó
 - **Falhou:** o motivo e a informação de que o crédito foi devolvido.
 - **Pronto quando:** os três estados aparecem com os dados do mock, com foco preso no painel e fechamento por Esc.
 
-### R4. Relatório e download
+### R4. Relatório e download ✅
 
 - Quadro: `Registros-Relatorio`.
 - "Gerar relatório" abre uma prévia do PDF num diálogo, com o botão "Baixar PDF".
