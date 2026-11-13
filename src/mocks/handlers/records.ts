@@ -22,7 +22,8 @@ const DAY = 24 * HOUR
 /** Quanto tempo um registro "processando" dos mocks leva para concluir. */
 export const MOCK_PROCESSING_MS = 20_000
 
-type StoredRecord = RecordDetails & { readyAt?: number }
+/** `ownerEmail`: só o dono vê o registro. */
+type StoredRecord = RecordDetails & { ownerEmail: string; readyAt?: number }
 
 const SAMPLES: Array<[string, string]> = [
   ['Anúncio do imóvel da Rua das Flores', 'https://imobiliaria-exemplo.com.br/anuncio/4821'],
@@ -84,6 +85,7 @@ function seed() {
       startedAt: new Date(start).toISOString(),
       finishedAt: finished,
       responsible: 'Usuária Demo',
+      ownerEmail: DEMO_USER.email,
     }
     if (status === 'FALHOU') {
       return {
@@ -114,6 +116,32 @@ export function completeMockRecord(id: string) {
   delete record.readyAt
 }
 
+/** Cria um registro em processamento a partir de uma sessão de captura concluída. */
+export function addMockRecord(input: {
+  ownerEmail: string
+  title: string
+  url: string
+  startedAt: string
+  responsible: string
+  files: Array<Pick<RecordFile, 'name' | 'kind' | 'sizeBytes' | 'capturedAt'>>
+}) {
+  const next = Math.max(0, ...records.map((r) => Number(r.id))) + 1
+  const id = String(next).padStart(6, '0')
+  records.unshift({
+    id,
+    title: input.title,
+    url: input.url,
+    status: 'PROCESSANDO',
+    startedAt: input.startedAt,
+    finishedAt: new Date().toISOString(),
+    responsible: input.responsible,
+    ownerEmail: input.ownerEmail,
+    files: input.files.map((f) => ({ ...f, sha256: null })),
+    readyAt: Date.now() + MOCK_PROCESSING_MS,
+  })
+  return id
+}
+
 /** Registros do usuário da sessão; `undefined` sem sessão. */
 function recordsForSession() {
   const user = getSessionUser()
@@ -122,14 +150,18 @@ function recordsForSession() {
   for (const record of records) {
     if (record.readyAt !== undefined && record.readyAt <= now) completeMockRecord(record.id)
   }
-  return user.email === DEMO_USER.email ? records : []
+  return records.filter((r) => r.ownerEmail === user.email)
 }
 
 function toSummary({ id, title, url, status, startedAt, finishedAt }: StoredRecord): RecordSummary {
   return { id, title, url, status, startedAt, finishedAt }
 }
 
-function toDetails({ readyAt: _readyAt, ...record }: StoredRecord): RecordDetails {
+function toDetails({
+  readyAt: _readyAt,
+  ownerEmail: _owner,
+  ...record
+}: StoredRecord): RecordDetails {
   return record
 }
 

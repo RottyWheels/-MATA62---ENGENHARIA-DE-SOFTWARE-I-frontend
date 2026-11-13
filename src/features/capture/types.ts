@@ -3,7 +3,38 @@
  * a confirmar com o backend (README, pendências com o backend, item 5).
  */
 
-export type CaptureStatus = 'RECORDING' | 'FINISHED' | 'FAILED'
+/**
+ * Estado da sessão de captura:
+ * - `LOADING`: o navegador remoto está abrindo o site;
+ * - `READY`: o site abriu; dá para capturar telas ou começar a gravar;
+ * - `RECORDING`: gravando o vídeo da navegação;
+ * - `LOAD_FAILED`: o site não abriu (nenhum crédito usado);
+ * - `FINISHED`: concluída; virou um registro em processamento;
+ * - `FAILED`: falhou depois de aberta (nenhum crédito usado);
+ * - `CANCELED`: cancelada pelo usuário (nenhum crédito usado).
+ */
+export const CAPTURE_STATUSES = [
+  'LOADING',
+  'READY',
+  'RECORDING',
+  'LOAD_FAILED',
+  'FINISHED',
+  'FAILED',
+  'CANCELED',
+] as const
+
+export type CaptureStatus = (typeof CAPTURE_STATUSES)[number]
+
+/** Estados em que a sessão terminou e o socket não reconecta. */
+export const FINAL_CAPTURE_STATUSES: readonly CaptureStatus[] = [
+  'LOAD_FAILED',
+  'FINISHED',
+  'FAILED',
+  'CANCELED',
+]
+
+export const isFinalCaptureStatus = (status: CaptureStatus | null | undefined) =>
+  !!status && FINAL_CAPTURE_STATUSES.includes(status)
 
 /** Mensagens do servidor para o navegador. */
 export type ServerMessage =
@@ -40,9 +71,10 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
     }
     if (
       m.type === 'status' &&
-      (m.status === 'RECORDING' || m.status === 'FINISHED' || m.status === 'FAILED')
+      typeof m.status === 'string' &&
+      (CAPTURE_STATUSES as readonly string[]).includes(m.status)
     ) {
-      return { type: 'status', status: m.status }
+      return { type: 'status', status: m.status as CaptureStatus }
     }
     return null
   } catch {

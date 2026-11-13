@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { completeMockRecord } from '@/mocks/handlers/records'
-import { loginAsDemo } from '@/test/session'
+import { loginAsDemo, loginAsNewUser } from '@/test/session'
 
 import { getRecord, getRecordFile, getRecords, isRecordPending } from './records'
 
@@ -60,16 +60,7 @@ describe('API de registros (mocks)', () => {
   })
 
   it('conta nova não tem registros', async () => {
-    // Sem login de demonstração: a sessão é de outra conta, criada na hora.
-    const { postLogin, postRegister } = await import('@/features/auth/api/auth')
-    await postRegister({
-      type: 'COMUM',
-      fullName: 'Conta Nova',
-      email: 'nova@veridt.test',
-      password: 'Senha#Forte1',
-      cpf: '11144477735',
-    })
-    await postLogin({ email: 'nova@veridt.test', password: 'Senha#Forte1' })
+    await loginAsNewUser('nova@veridt.test')
 
     expect(await getRecords({})).toMatchObject({ totalElements: 0, content: [] })
   })

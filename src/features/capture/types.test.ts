@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { captureSocketUrl } from './hooks/useCaptureSocket'
-import { parseServerMessage } from './types'
+import { isFinalCaptureStatus, parseServerMessage } from './types'
 
 describe('protocolo da captura', () => {
   it('monta a URL do WebSocket na mesma origem', () => {
@@ -24,6 +24,12 @@ describe('protocolo da captura', () => {
       type: 'status',
       status: 'FINISHED',
     })
+    for (const status of ['LOADING', 'READY', 'LOAD_FAILED', 'CANCELED']) {
+      expect(parseServerMessage(JSON.stringify({ type: 'status', status }))).toEqual({
+        type: 'status',
+        status,
+      })
+    }
   })
 
   it('descarta mensagens inválidas', () => {
@@ -31,5 +37,16 @@ describe('protocolo da captura', () => {
     expect(parseServerMessage('{"type":"frame","data":1}')).toBeNull()
     expect(parseServerMessage('{"type":"status","status":"OUTRO"}')).toBeNull()
     expect(parseServerMessage(new ArrayBuffer(2))).toBeNull()
+  })
+
+  it('sabe quando a sessão terminou (o socket não reconecta)', () => {
+    expect(
+      ['LOAD_FAILED', 'FINISHED', 'FAILED', 'CANCELED'].every((s) =>
+        isFinalCaptureStatus(s as never),
+      ),
+    ).toBe(true)
+    expect(isFinalCaptureStatus('READY')).toBe(false)
+    expect(isFinalCaptureStatus('RECORDING')).toBe(false)
+    expect(isFinalCaptureStatus(null)).toBe(false)
   })
 })

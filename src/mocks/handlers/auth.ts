@@ -85,6 +85,14 @@ export function addCredits(userId: string, credits: number) {
   if (user) user.creditBalance = (user.creditBalance ?? 0) + credits
 }
 
+/** Desconta créditos; `false` se o saldo não cobrir (o saldo não muda). */
+export function spendCredits(userId: string, credits: number) {
+  const user = [...db.users.values()].find((u) => u.id === userId)
+  if (!user || (user.creditBalance ?? 0) < credits) return false
+  user.creditBalance = (user.creditBalance ?? 0) - credits
+  return true
+}
+
 const unauthenticated = () => problem(401, 'NAO_AUTENTICADO', 'Autenticação necessária.')
 
 export const authHandlers = [

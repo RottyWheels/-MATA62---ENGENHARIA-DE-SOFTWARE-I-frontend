@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
+  isFinalCaptureStatus,
   parseServerMessage,
   type CaptureFrame,
   type CaptureStatus,
@@ -52,7 +53,7 @@ export function useCaptureSocket(sessionId: string | undefined) {
           setLastFrame(message)
         } else {
           setCaptureStatus(message.status)
-          if (message.status !== 'RECORDING') finished = true
+          if (isFinalCaptureStatus(message.status)) finished = true
         }
       }
       ws.onerror = () => setStatus('error')
