@@ -11,7 +11,8 @@ export function Providers({ children }: { children: ReactNode }) {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         {children}
-        <Toaster richColors closeButton position="top-right" />
+        {/* No celular, abaixo da faixa verde do topo (h-14): o aviso não cobre o menu. */}
+        <Toaster richColors closeButton position="top-right" mobileOffset={{ top: 64 }} />
         {import.meta.env.DEV && <ReactQueryDevtools buttonPosition="bottom-left" />}
       </QueryClientProvider>
     </ThemeProvider>
