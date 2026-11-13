@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => {
       include: ['src/**/*.test.{ts,tsx}'],
       css: false,
       restoreMocks: true,
+      // Testes de formulário simulam muita digitação; com todos os arquivos em
+      // paralelo, 5 s (o padrão) é pouco. Uma asserção errada continua falhando.
+      testTimeout: 15_000,
     },
     server: {
       port: 5173,
