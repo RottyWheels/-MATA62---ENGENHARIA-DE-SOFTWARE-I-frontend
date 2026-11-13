@@ -26,6 +26,9 @@ export const MOCK_PRICE: CapturePrice = { creditsPerRecord: 1 }
 /** Tempo que o navegador remoto simulado leva para abrir o site. */
 export const MOCK_LOAD_MS = 800
 
+/** Abertura automática do site; os testes podem desligá-la e abrir na hora certa. */
+let autoLoad = true
+
 /** JPEG 1×1 (cinza) para quando não há `OffscreenCanvas` (testes no jsdom). */
 const TINY_JPEG =
   '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q=='
@@ -43,6 +46,7 @@ const timers = new Set<ReturnType<typeof setTimeout>>()
 let nextId = 1
 
 export function resetCaptureMock() {
+  autoLoad = true
   for (const timer of timers) clearTimeout(timer)
   timers.clear()
   captures.clear()
@@ -103,6 +107,31 @@ async function sendFrame(capture: StoredCapture) {
   if (capture.status !== 'READY' && capture.status !== 'RECORDING') return
   const data = await renderFrame(capture)
   broadcast(capture.id, { type: 'frame', data, width: FRAME_WIDTH, height: FRAME_HEIGHT })
+}
+
+/** Termina de "abrir" o site: `READY` com um quadro, ou `LOAD_FAILED` (`nao-abre`). */
+function finishLoading(capture: StoredCapture) {
+  if (capture.status !== 'LOADING') return
+  if (capture.url.includes('nao-abre')) {
+    setStatus(capture, 'LOAD_FAILED')
+    return
+  }
+  setStatus(capture, 'READY')
+  void sendFrame(capture)
+}
+
+/**
+ * Testes: `false` deixa as sessões novas em `LOADING` até {@link openMockSite},
+ * para conferir o estado "abrindo" sem depender do relógio.
+ */
+export function setMockAutoLoad(value: boolean) {
+  autoLoad = value
+}
+
+/** Testes: termina de abrir o site de uma sessão na hora. */
+export function openMockSite(id: string) {
+  const capture = captures.get(id)
+  if (capture) finishLoading(capture)
 }
 
 /** Simula uma falha depois que o site abriu (ex.: o navegador remoto caiu). */
@@ -188,15 +217,7 @@ export const captureHandlers = [
     }
     captures.set(capture.id, capture)
 
-    later(MOCK_LOAD_MS, () => {
-      if (capture.status !== 'LOADING') return
-      if (url.includes('nao-abre')) {
-        setStatus(capture, 'LOAD_FAILED')
-        return
-      }
-      setStatus(capture, 'READY')
-      void sendFrame(capture)
-    })
+    if (autoLoad) later(MOCK_LOAD_MS, () => finishLoading(capture))
 
     return HttpResponse.json(toCapture(capture), { status: 201 })
   }),

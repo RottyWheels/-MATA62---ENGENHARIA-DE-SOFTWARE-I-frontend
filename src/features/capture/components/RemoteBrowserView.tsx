@@ -1,18 +1,9 @@
-import { CameraIcon, SquareIcon } from 'lucide-react'
-import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
+import { LockIcon } from 'lucide-react'
+import { useEffect, useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 
-import { Badge } from '@/shared/components/ui/badge'
-import { Button } from '@/shared/components/ui/button'
+import { cn } from '@/shared/lib/utils'
 
-import { useCaptureSocket } from '../hooks/useCaptureSocket'
-import type { SocketStatus } from '../types'
-
-const STATUS_LABEL: Record<SocketStatus, string> = {
-  connecting: 'Conectando…',
-  open: 'Conectado',
-  closed: 'Desconectado',
-  error: 'Erro de conexão',
-}
+import type { CaptureFrame, ClientMessage } from '../types'
 
 /** Converte a posição do mouse no canvas (CSS) para o viewport remoto. */
 function toRemotePoint(canvas: HTMLCanvasElement, clientX: number, clientY: number) {
@@ -22,40 +13,55 @@ function toRemotePoint(canvas: HTMLCanvasElement, clientX: number, clientY: numb
   return { x: Math.round(x), y: Math.round(y) }
 }
 
+type Props = {
+  /** Endereço mostrado na barra do navegador. */
+  url: string
+  /** Último quadro recebido pelo WebSocket. */
+  frame: CaptureFrame | null
+  /** Envia mouse, rolagem e teclado ao navegador remoto. */
+  send: (message: ClientMessage) => boolean
+  /** Aceita interação (site aberto). */
+  interactive: boolean
+  /** Conteúdo por cima do quadro: abrindo o site, erro, sessão encerrada. */
+  overlay?: ReactNode
+  /** Destaque de gravação em andamento (moldura azul, canvas "Gravando"). */
+  recording?: boolean
+}
+
 /**
- * Esqueleto do navegador remoto ao vivo: desenha o último quadro recebido
- * e repassa mouse, rolagem e teclado ao backend. Sem regra de negócio.
+ * O navegador remoto: barra de endereço e o último quadro do site, num canvas
+ * que repassa mouse, rolagem e teclado. Só exibe; quem cuida do WebSocket e do
+ * estado da sessão é a página.
  */
-export function RemoteBrowserView({ sessionId }: { sessionId: string }) {
+export function RemoteBrowserView({ url, frame, send, interactive, overlay, recording }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const pendingMove = useRef<{ x: number; y: number } | null>(null)
   const moveFrame = useRef<number | null>(null)
-  const { status, captureStatus, lastFrame, send } = useCaptureSocket(sessionId)
 
   // Desenha o quadro (JPEG base64). O canvas assume o tamanho do viewport remoto.
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !lastFrame) return
+    if (!canvas || !frame) return
     const image = new Image()
     image.onload = () => {
-      if (canvas.width !== lastFrame.width) canvas.width = lastFrame.width
-      if (canvas.height !== lastFrame.height) canvas.height = lastFrame.height
-      canvas.getContext('2d')?.drawImage(image, 0, 0, lastFrame.width, lastFrame.height)
+      if (canvas.width !== frame.width) canvas.width = frame.width
+      if (canvas.height !== frame.height) canvas.height = frame.height
+      canvas.getContext('2d')?.drawImage(image, 0, 0, frame.width, frame.height)
     }
-    image.src = `data:image/jpeg;base64,${lastFrame.data}`
-  }, [lastFrame])
+    image.src = `data:image/jpeg;base64,${frame.data}`
+  }, [frame])
 
   // `wheel` precisa de listener não passivo para impedir a rolagem da página.
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || !interactive) return
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
       send({ type: 'wheel', deltaX: event.deltaX, deltaY: event.deltaY })
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', onWheel)
-  }, [send])
+  }, [send, interactive])
 
   useEffect(
     () => () => {
@@ -65,6 +71,7 @@ export function RemoteBrowserView({ sessionId }: { sessionId: string }) {
   )
 
   const handleMouse = (action: 'down' | 'up') => (event: MouseEvent<HTMLCanvasElement>) => {
+    if (!interactive) return
     if (action === 'down') event.currentTarget.focus()
     const { x, y } = toRemotePoint(event.currentTarget, event.clientX, event.clientY)
     send({ type: 'mouse', action, x, y, button: event.button })
@@ -72,6 +79,7 @@ export function RemoteBrowserView({ sessionId }: { sessionId: string }) {
 
   // Movimento limitado a um envio por quadro de animação.
   const handleMouseMove = (event: MouseEvent<HTMLCanvasElement>) => {
+    if (!interactive) return
     pendingMove.current = toRemotePoint(event.currentTarget, event.clientX, event.clientY)
     if (moveFrame.current !== null) return
     moveFrame.current = requestAnimationFrame(() => {
@@ -82,62 +90,55 @@ export function RemoteBrowserView({ sessionId }: { sessionId: string }) {
 
   const handleKey = (action: 'down' | 'up') => (event: KeyboardEvent<HTMLCanvasElement>) => {
     // Tab continua navegando pela página para não prender o foco.
-    if (event.key === 'Tab') return
+    if (!interactive || event.key === 'Tab') return
     event.preventDefault()
     send({ type: 'key', action, key: event.key, code: event.code })
   }
 
-  const isOpen = status === 'open'
-
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2" aria-live="polite">
-          <Badge variant={isOpen ? 'default' : 'secondary'}>{STATUS_LABEL[status]}</Badge>
-          {captureStatus && <Badge variant="outline">{captureStatus}</Badge>}
+    <div className={cn('rounded-xl', recording && 'bg-blue-700 p-[3px]')}>
+      <div className="overflow-hidden rounded-[10px] border bg-background">
+        <div className="flex items-center gap-3 border-b bg-muted px-3.5 py-2.5">
+          <div aria-hidden className="hidden gap-1.5 sm:flex">
+            <span className="size-2.5 rounded-full bg-border" />
+            <span className="size-2.5 rounded-full bg-border" />
+            <span className="size-2.5 rounded-full bg-border" />
+          </div>
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border bg-background px-3 py-1.5">
+            <LockIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate font-mono text-xs sm:text-sm" title={url}>
+              {url}
+            </span>
+          </div>
+          <span className="hidden text-xs text-muted-foreground md:inline">
+            Navegador seguro do Veridt
+          </span>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!isOpen}
-            onClick={() => send({ type: 'screenshot' })}
-          >
-            <CameraIcon />
-            Capturar tela
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            disabled={!isOpen}
-            onClick={() => send({ type: 'finish' })}
-          >
-            <SquareIcon />
-            Concluir
-          </Button>
-        </div>
-      </div>
 
-      <div className="relative overflow-hidden rounded-lg border bg-muted">
-        <canvas
-          ref={canvasRef}
-          width={1280}
-          height={720}
-          tabIndex={0}
-          aria-label="Navegador remoto. Clique para interagir; use Tab para sair."
-          className="block h-auto w-full cursor-default outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          onMouseDown={handleMouse('down')}
-          onMouseUp={handleMouse('up')}
-          onMouseMove={handleMouseMove}
-          onContextMenu={(event) => event.preventDefault()}
-          onKeyDown={handleKey('down')}
-          onKeyUp={handleKey('up')}
-        />
-        {!lastFrame && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-            Aguardando imagem do navegador remoto…
-          </p>
-        )}
+        <div className="relative aspect-video bg-muted">
+          <canvas
+            ref={canvasRef}
+            width={1280}
+            height={720}
+            tabIndex={interactive ? 0 : -1}
+            aria-label="Navegador remoto. Clique para interagir; use Tab para sair."
+            className="block h-full w-full cursor-default outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            onMouseDown={handleMouse('down')}
+            onMouseUp={handleMouse('up')}
+            onMouseMove={handleMouseMove}
+            onContextMenu={(event) => event.preventDefault()}
+            onKeyDown={handleKey('down')}
+            onKeyUp={handleKey('up')}
+          />
+          {overlay && (
+            <div
+              data-slot="browser-overlay"
+              className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted/95 px-6 text-center"
+            >
+              {overlay}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

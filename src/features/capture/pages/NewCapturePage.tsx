@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 
 import { useMe } from '@/features/auth'
 import { applyProblemDetailToForm, getProblemDetail } from '@/shared/api/problem-detail'
@@ -20,9 +20,19 @@ import {
   type NewCaptureFormValues,
 } from '../schemas/capture'
 
+function readPrefill(state: unknown): Partial<NewCaptureFormValues> {
+  if (typeof state !== 'object' || state === null) return {}
+  const { title, url } = state as Record<string, unknown>
+  return {
+    ...(typeof title === 'string' && { title }),
+    ...(typeof url === 'string' && { url }),
+  }
+}
+
 /** Novo Registro (REQ 08): Figma "Criar Novo Registro", estado inicial. */
 export function NewCapturePage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const me = useMe()
   const price = useCapturePrice()
   const create = useCreateCapture()
@@ -32,7 +42,8 @@ export function NewCapturePage() {
 
   const form = useForm<NewCaptureFormValues>({
     resolver: zodResolver(newCaptureSchema),
-    defaultValues: newCaptureDefaultValues,
+    // "Alterar endereço" (site que não abriu) volta com o título e a URL preenchidos.
+    defaultValues: { ...newCaptureDefaultValues, ...readPrefill(location.state) },
   })
 
   const cost = price.data?.creditsPerRecord
