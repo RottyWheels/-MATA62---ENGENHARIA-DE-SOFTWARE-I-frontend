@@ -108,10 +108,10 @@ export const routes: RouteObject[] = [
                 }),
               },
               {
+                // A mesma lista, com o painel de detalhes aberto (Figma).
                 path: 'registros/:id',
                 lazy: async () => ({
-                  Component: (await import('@/features/records/pages/RecordDetailsPage'))
-                    .RecordDetailsPage,
+                  Component: (await import('@/features/records/pages/RecordsPage')).RecordsPage,
                 }),
               },
             ],
