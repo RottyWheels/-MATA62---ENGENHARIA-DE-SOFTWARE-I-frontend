@@ -1,6 +1,6 @@
 import { isAxiosError } from 'axios'
 import { CircleAlertIcon, ClockIcon, CopyIcon } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useLocation, useNavigate, type To } from 'react-router'
 import { toast } from 'sonner'
 
@@ -35,7 +35,12 @@ type Props = {
 export function RecordDetailsSheet({ id, closeTo }: Props) {
   const navigate = useNavigate()
   const location = useLocation()
-  const record = useRecord(id)
+  // Ao fechar, o id sai da URL, mas o painel ainda anima: guarda o último aberto
+  // para continuar mostrando o registro (e para devolver o foco ao link dele).
+  const [lastId, setLastId] = useState(id)
+  if (id && id !== lastId) setLastId(id)
+  const shownId = id ?? lastId
+  const record = useRecord(shownId, { poll: !!id })
   const openedFromList = (location.state as { fromList?: boolean } | null)?.fromList === true
 
   // Aberto pela lista: fechar volta no histórico, e o "voltar" do navegador não
@@ -53,10 +58,19 @@ export function RecordDetailsSheet({ id, closeTo }: Props) {
         if (!open) close()
       }}
     >
-      <SheetContent className="w-full gap-0 overflow-y-auto data-[side=right]:sm:max-w-md">
+      <SheetContent
+        className="w-full gap-0 overflow-y-auto data-[side=right]:sm:max-w-md"
+        onCloseAutoFocus={(event) => {
+          // O painel abre pela URL, sem um SheetTrigger: o foco volta ao "Ver detalhes" dele.
+          const link = document.querySelector<HTMLElement>(`[data-record-link="${shownId}"]`)
+          if (!link) return
+          event.preventDefault()
+          link.focus()
+        }}
+      >
         <SheetHeader className="p-6 pb-4">
           <SheetTitle className="text-xl">
-            Registro <span className="font-mono">{id ? formatRecordId(id) : ''}</span>
+            Registro <span className="font-mono">{shownId ? formatRecordId(shownId) : ''}</span>
           </SheetTitle>
           <SheetDescription>Visualize os detalhes do registro abaixo.</SheetDescription>
         </SheetHeader>

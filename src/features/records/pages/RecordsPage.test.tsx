@@ -12,8 +12,8 @@ import { RecordsPage } from './RecordsPage'
 vi.mock('@/shared/lib/download', () => ({ saveBlob: vi.fn() }))
 
 const routes = [
-  { path: '/registros', element: <RecordsPage /> },
-  { path: '/registros/:id', element: <RecordsPage /> },
+  // Como em src/app/routes.tsx: uma rota só, com o id opcional.
+  { path: '/registros/:id?', element: <RecordsPage /> },
   { path: '/capturas/nova', element: <p>novo registro</p> },
 ]
 

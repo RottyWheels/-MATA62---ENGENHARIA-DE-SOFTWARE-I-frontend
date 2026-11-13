@@ -48,13 +48,16 @@ export const RECORD_POLL_MS = 5_000
 export const isRecordPending = (status: RecordStatus | undefined) =>
   status === 'EM_ANDAMENTO' || status === 'PROCESSANDO'
 
-/** Detalhes de um registro; consulta de novo enquanto ele estiver em andamento ou processando. */
-export function useRecord(id: string | undefined) {
+/**
+ * Detalhes de um registro; consulta de novo enquanto ele estiver em andamento ou
+ * processando. `poll: false` mantém os dados sem novas consultas (painel fechando).
+ */
+export function useRecord(id: string | undefined, { poll = true }: { poll?: boolean } = {}) {
   return useQuery<RecordDetails, RecordsError>({
     queryKey: getRecordQueryKey(id ?? ''),
     queryFn: ({ signal }) => getRecord(id ?? '', signal),
     enabled: !!id,
     refetchInterval: (query) =>
-      isRecordPending(query.state.data?.status) ? RECORD_POLL_MS : false,
+      poll && isRecordPending(query.state.data?.status) ? RECORD_POLL_MS : false,
   })
 }

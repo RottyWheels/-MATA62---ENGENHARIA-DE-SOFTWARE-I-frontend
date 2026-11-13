@@ -102,14 +102,9 @@ export const routes: RouteObject[] = [
                 }),
               },
               {
-                path: 'registros',
-                lazy: async () => ({
-                  Component: (await import('@/features/records/pages/RecordsPage')).RecordsPage,
-                }),
-              },
-              {
-                // A mesma lista, com o painel de detalhes aberto (Figma).
-                path: 'registros/:id',
+                // Uma rota só, com o id opcional: abrir e fechar o painel de detalhes
+                // (Figma) não remonta a lista, e o foco volta para o link de origem.
+                path: 'registros/:id?',
                 lazy: async () => ({
                   Component: (await import('@/features/records/pages/RecordsPage')).RecordsPage,
                 }),

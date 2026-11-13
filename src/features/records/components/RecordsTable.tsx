@@ -73,6 +73,7 @@ export function RecordsTable({ data, loading = false, empty, search = '' }: Prop
         <Link
           to={{ pathname: `/registros/${info.row.original.id}`, search }}
           state={{ fromList: true }}
+          data-record-link={info.row.original.id}
           className="font-medium whitespace-nowrap text-primary underline underline-offset-4"
         >
           Ver detalhes
