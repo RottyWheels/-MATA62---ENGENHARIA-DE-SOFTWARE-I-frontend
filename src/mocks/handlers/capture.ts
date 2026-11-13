@@ -33,6 +33,19 @@ let autoLoad = true
 const TINY_JPEG =
   '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q=='
 
+/** Intervalo mínimo entre quadros enviados em resposta à interação. */
+const FRAME_INTERVAL_MS = 250
+
+function isMouseMove(data: unknown) {
+  if (typeof data !== 'string') return false
+  try {
+    const message = JSON.parse(data) as { type?: string; action?: string }
+    return message.type === 'mouse' && message.action === 'move'
+  } catch {
+    return false
+  }
+}
+
 const FRAME_WIDTH = 1280
 const FRAME_HEIGHT = 720
 
@@ -330,8 +343,17 @@ export const captureHandlers = [
     client.send(JSON.stringify({ type: 'status', status: capture.status }))
     void sendFrame(capture)
 
-    // Mouse, rolagem e teclado: o "site" responde com um quadro novo.
-    client.addEventListener('message', () => void sendFrame(capture))
+    // Clique, rolagem e teclado: o "site" responde com um quadro novo. Movimento do
+    // mouse não muda a página, e no máximo um quadro a cada FRAME_INTERVAL_MS: gerar
+    // um JPEG por mensagem travava a aba.
+    let lastFrameAt = 0
+    client.addEventListener('message', (event) => {
+      if (isMouseMove(event.data)) return
+      const now = Date.now()
+      if (now - lastFrameAt < FRAME_INTERVAL_MS) return
+      lastFrameAt = now
+      void sendFrame(capture)
+    })
     client.addEventListener('close', () => set.delete(client))
   }),
 ]
