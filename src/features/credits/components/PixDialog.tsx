@@ -14,6 +14,8 @@ import {
 
 import { usePayment } from '../api/credits'
 import type { Payment } from '../api/types'
+import { isPaymentSimulationEnabled } from '../lib/simulation'
+import { PaymentSimulation } from './PaymentSimulation'
 import { PaymentStatusBadge } from './PaymentStatusBadge'
 import { PixDetails } from './PixDetails'
 
@@ -30,7 +32,7 @@ export function PixDialog({ payment, onOpenChange }: PixDialogProps) {
   const notified = useRef<string | null>(null)
 
   useEffect(() => {
-    if (status === 'APPROVED' && current && notified.current !== current.id) {
+    if (status === 'APROVADO' && current && notified.current !== current.id) {
       notified.current = current.id
       toast.success('Pagamento confirmado', {
         description: `${current.credits} créditos foram adicionados ao seu saldo.`,
@@ -48,15 +50,21 @@ export function PixDialog({ payment, onOpenChange }: PixDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        {current?.pix && status === 'PENDING' && <PixDetails payment={current} pix={current.pix} />}
+        {current?.pix && status === 'PENDENTE' && (
+          <PixDetails payment={current} pix={current.pix} />
+        )}
+        {current &&
+          status === 'PENDENTE' &&
+          import.meta.env.DEV &&
+          isPaymentSimulationEnabled() && <PaymentSimulation paymentId={current.id} />}
 
-        {status === 'APPROVED' && (
+        {status === 'APROVADO' && (
           <p className="text-sm">
             Recebemos o pagamento. Os <strong>{current?.credits} créditos</strong> já estão no seu
             saldo.
           </p>
         )}
-        {(status === 'REJECTED' || status === 'EXPIRED') && (
+        {(status === 'RECUSADO' || status === 'EXPIRADO') && (
           <p className="text-sm">
             O pagamento não foi concluído. Gere um novo Pix para tentar de novo.
           </p>
@@ -64,7 +72,7 @@ export function PixDialog({ payment, onOpenChange }: PixDialogProps) {
 
         <DialogFooter className="items-center sm:justify-between">
           {status && <PaymentStatusBadge status={status} />}
-          {status === 'APPROVED' ? (
+          {status === 'APROVADO' ? (
             <Button asChild>
               <Link to="/capturas/nova">Novo registro</Link>
             </Button>

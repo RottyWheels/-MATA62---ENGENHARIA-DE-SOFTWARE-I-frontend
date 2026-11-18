@@ -94,7 +94,7 @@ describe('RegisterPage', () => {
     await user.type(screen.getByLabelText('Confirmar senha'), 'Senha#Forte1')
     await user.click(screen.getByRole('button', { name: 'Criar conta' }))
 
-    expect(await screen.findByText('tela de login')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Confirme seu e-mail' })).toBeInTheDocument()
     expect(body).toEqual({
       type: 'ADVOGADO',
       fullName: 'Ana Souza',
@@ -103,6 +103,35 @@ describe('RegisterPage', () => {
       cpf: '52998224725',
       oabRegistrations: [{ number: '12345', state: 'BA', type: 'PRINCIPAL' }],
     })
+  })
+
+  it('depois do cadastro, pede a confirmação do e-mail em vez de entrar', async () => {
+    let loginCalled = false
+    server.use(
+      http.post('*/api/auth/login', () => {
+        loginCalled = true
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const { user } = renderRegister()
+
+    await user.type(screen.getByLabelText('Nome completo'), 'Ana Souza')
+    await user.type(screen.getByLabelText('E-mail'), ' Ana@Exemplo.com ')
+    await user.type(screen.getByLabelText('CPF'), '11144477735')
+    await user.type(screen.getByLabelText('Senha'), 'Senha#Forte1')
+    await user.type(screen.getByLabelText('Confirmar senha'), 'Senha#Forte1')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+
+    const notice = await screen.findByRole('status')
+    expect(screen.getByRole('heading', { name: 'Confirme seu e-mail' })).toBeInTheDocument()
+    expect(notice).toHaveTextContent('ana@exemplo.com')
+    expect(notice).toHaveTextContent('O link vale 24 horas')
+    expect(notice).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Reenviar e-mail' })).toBeEnabled()
+    expect(loginCalled).toBe(false)
+
+    await user.click(screen.getByRole('link', { name: 'Ir para o login' }))
+    expect(await screen.findByText('tela de login')).toBeInTheDocument()
   })
 
   it('exige letra, número e símbolo na senha, como o backend', async () => {
@@ -196,7 +225,7 @@ describe('RegisterPage: várias inscrições na OAB', () => {
     await chooseType(user, 'Tipo da inscrição 3', 'Estagiário')
     await user.click(screen.getByRole('button', { name: 'Criar conta' }))
 
-    expect(await screen.findByText('tela de login')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Confirme seu e-mail' })).toBeInTheDocument()
     expect(body).toMatchObject({
       type: 'ADVOGADO',
       oabRegistrations: [

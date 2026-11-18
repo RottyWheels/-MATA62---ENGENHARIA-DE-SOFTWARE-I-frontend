@@ -84,19 +84,11 @@ describe('NewCapturePage', () => {
     expect(await screen.findByText('tela de créditos')).toBeInTheDocument()
   })
 
-  it('sem o saldo na tela (backend real), o 402 mostra o mesmo aviso', async () => {
+  it('sem o saldo na tela (consulta do saldo falhou), o 402 mostra o mesmo aviso', async () => {
     await loginAsDemo()
-    // Como o backend atual: `GET /api/me` ainda não traz `creditBalance`.
     server.use(
-      http.get('*/api/me', () =>
-        HttpResponse.json({
-          id: '1',
-          fullName: 'Usuária Demo',
-          email: 'demo@veridt.test',
-          type: 'COMUM',
-          oabRegistrations: [],
-          createdAt: '2026-11-01T12:00:00Z',
-        }),
+      http.get('*/api/credits/balance', () =>
+        HttpResponse.json({ status: 503, code: 'INDISPONIVEL' }, { status: 503 }),
       ),
       http.post('*/api/captures', () =>
         HttpResponse.json(

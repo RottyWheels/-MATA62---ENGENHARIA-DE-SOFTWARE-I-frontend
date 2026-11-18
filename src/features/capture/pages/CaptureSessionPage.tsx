@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 
-import { useMe } from '@/features/auth'
+import { useBalance } from '@/features/credits'
 import { getErrorMessage } from '@/shared/api/problem-detail'
 import { PageHeader } from '@/shared/components/page/PageHeader'
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert'
@@ -104,7 +104,7 @@ function LiveSession({ capture, socket }: { capture: Capture; socket: Socket }) 
   const cancel = useCancelCapture()
   const [confirmCancel, setConfirmCancel] = useState(false)
   const navigate = useNavigate()
-  const me = useMe()
+  const balance = useBalance()
   const { retry, pending: retrying } = useRetryCapture(capture)
   // Fechar o diálogo de conclusão ou de falha deixa o aviso por cima do navegador.
   const [dismissed, setDismissed] = useState<CaptureStatus | null>(null)
@@ -202,7 +202,7 @@ function LiveSession({ capture, socket }: { capture: Capture; socket: Socket }) 
         capture={capture}
         open={status === 'FINISHED' && dismissed !== 'FINISHED'}
         onOpenChange={(open) => !open && setDismissed('FINISHED')}
-        balance={me.data?.creditBalance}
+        balance={balance.data?.balance}
       />
       <CaptureFailedDialog
         open={status === 'FAILED' && dismissed !== 'FAILED'}

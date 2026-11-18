@@ -26,7 +26,6 @@ const user = {
   fullName: 'Ana Souza',
   email: 'ana@x.test',
   type: 'COMUM',
-  creditBalance: 3,
 }
 
 describe('RequireAuth', () => {

@@ -1,46 +1,63 @@
 import { delay, http, HttpResponse } from 'msw'
 
-import type { CreditPackage, Payment, PurchaseRequest } from '@/features/credits'
+import type {
+  CreditPackage,
+  Payment,
+  PaymentPage,
+  PaymentSimulationRequest,
+  PurchaseRequest,
+} from '@/features/credits'
+import type { ProblemDetail } from '@/shared/api/problem-detail'
+import { isValidCpf, isValidUf, onlyDigits } from '@/shared/lib/validators'
 
 import { problem } from '../utils'
-import { addCredits, getSessionUser } from './auth'
+import { addCredits, getBalance, getSessionUser } from './auth'
 
 /**
- * Backend de créditos em memória. Os pagamentos são aprovados sozinhos depois de
- * {@link MOCK_APPROVAL_MS} (Pix) para simular a confirmação do Mercado Pago.
+ * Backend de créditos em memória, imitando o módulo `credits` do backend (branch
+ * `feature/credits`): status em português, `Idempotency-Key` obrigatório (201 na primeira vez,
+ * 200 ao repetir), 422 `PACOTE_INDISPONIVEL`, 400 com `billing.*` e 404 `PAGAMENTO_NAO_ENCONTRADO`.
+ * Como no backend sem provedor, o pedido fica `PENDENTE` até a simulação aprovar ou recusar.
  */
 
+/** Os mesmos pacotes (e valores provisórios) da migração `V6__creditos.sql` do backend. */
 export const MOCK_PACKAGES: CreditPackage[] = [
   {
     id: 'BASICO',
-    name: 'Pacote Básico',
+    name: 'Básico',
     credits: 10,
     pricePerCredit: 5,
     price: 50,
-    description: 'Ideal para poucas ocorrências.',
+    description: 'Ideal para registros pontuais',
   },
   {
     id: 'MEDIO',
-    name: 'Pacote Médio',
-    credits: 30,
-    pricePerCredit: 4,
-    price: 120,
-    description: 'Para uso frequente.',
+    name: 'Médio',
+    credits: 50,
+    pricePerCredit: 4.5,
+    price: 225,
+    description: '10% de desconto por crédito',
   },
   {
     id: 'PREMIUM',
-    name: 'Pacote Premium',
+    name: 'Premium',
     credits: 100,
-    pricePerCredit: 3,
-    price: 300,
-    description: 'Para quem realiza muitos registros.',
+    pricePerCredit: 4,
+    price: 400,
+    description: '20% de desconto por crédito',
   },
 ]
 
-/** Tempo até o pagamento simulado ser aprovado. */
-export const MOCK_APPROVAL_MS = 6_000
+/** PNG transparente de 1×1 pixel: o mesmo "QR Code" do provedor falso do backend. */
+const PLACEHOLDER_QR_CODE =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{1,100}$/
 
 type StoredPayment = Payment & { userId: string; idempotencyKey: string }
+
+/** ID do n-ésimo pedido criado nos mocks (1, 2, …), para os testes. */
+export const mockPaymentId = (n: number) => `00000000-0000-4000-9000-${String(n).padStart(12, '0')}`
 
 const payments = new Map<string, StoredPayment>()
 let nextPaymentId = 1
@@ -50,106 +67,145 @@ export function resetCreditsMock() {
   nextPaymentId = 1
 }
 
-/** Aprova na hora um pagamento pendente (útil em testes). */
-export function approveMockPayment(id: string) {
+/** Aprova ou recusa um pedido pendente, como `PaymentConfirmationService` (repetir não faz nada). */
+export function decideMockPayment(id: string, approved: boolean) {
   const payment = payments.get(id)
-  if (!payment || payment.status !== 'PENDING') return
-  payment.status = 'APPROVED'
-  addCredits(payment.userId, payment.credits)
-}
-
-function settle(payment: StoredPayment) {
-  if (
-    payment.status === 'PENDING' &&
-    Date.now() - Date.parse(payment.createdAt) >= MOCK_APPROVAL_MS
-  ) {
-    approveMockPayment(payment.id)
-  }
+  if (!payment || payment.status !== 'PENDENTE') return
+  payment.status = approved ? 'APROVADO' : 'RECUSADO'
+  payment.decidedAt = new Date().toISOString()
+  if (approved) addCredits(payment.userId, payment.credits)
 }
 
 function publicPayment({ userId: _u, idempotencyKey: _k, ...payment }: StoredPayment): Payment {
   return payment
 }
 
-/** QR Code ilustrativo (não é um Pix válido): SVG com padrão pseudoaleatório. */
-function fakeQrCode(seed: string) {
-  const size = 25
-  let state = [...seed].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 7)
-  const rand = () => (state = (state * 1103515245 + 12345) >>> 0) / 2 ** 32
-  const finder = (x: number, y: number) =>
-    `<rect x="${x}" y="${y}" width="7" height="7"/><rect x="${x + 1}" y="${y + 1}" width="5" height="5" fill="#fff"/><rect x="${x + 2}" y="${y + 2}" width="3" height="3"/>`
-  let cells = ''
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const inFinder = (x < 8 && y < 8) || (x > size - 9 && y < 8) || (x < 8 && y > size - 9)
-      if (!inFinder && rand() > 0.5) cells += `<rect x="${x}" y="${y}" width="1" height="1"/>`
-    }
-  }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 ${size + 4} ${size + 4}" shape-rendering="crispEdges"><rect x="-2" y="-2" width="${size + 4}" height="${size + 4}" fill="#fff"/>${finder(0, 0)}${finder(size - 7, 0)}${finder(0, size - 7)}${cells}</svg>`
-  return `data:image/svg+xml;base64,${btoa(svg)}`
+const unauthenticated = () => problem(401, 'NAO_AUTENTICADO', 'Autenticação necessária.')
+const notFound = () => problem(404, 'PAGAMENTO_NAO_ENCONTRADO', 'Pagamento não encontrado.')
+
+/** As mesmas regras do `BillingInfoRequest` do backend, com os campos no formato `billing.*`. */
+function billingErrors(billing: PurchaseRequest['billing'] | undefined) {
+  const errors: NonNullable<ProblemDetail['errors']> = []
+  const add = (field: string, message: string) =>
+    errors.push({ field: `billing.${field}`, message })
+  const blank = (value: string | undefined) => !value?.trim()
+  if (!billing) return [{ field: 'billing', message: 'não deve ser nulo' }]
+  if (blank(billing.fullName)) add('fullName', 'não deve estar em branco')
+  if (blank(billing.email)) add('email', 'não deve estar em branco')
+  if (!/^\d{10,11}$/.test(billing.phone ?? '')) add('phone', 'Telefone com DDD, só dígitos')
+  if (!isValidCpf(onlyDigits(billing.cpf ?? ''))) add('cpf', 'CPF inválido')
+  if (!/^\d{8}$/.test(billing.cep ?? '')) add('cep', 'CEP com 8 dígitos')
+  if (blank(billing.street)) add('street', 'não deve estar em branco')
+  if (blank(billing.number)) add('number', 'não deve estar em branco')
+  if (blank(billing.neighborhood)) add('neighborhood', 'não deve estar em branco')
+  if (blank(billing.city)) add('city', 'não deve estar em branco')
+  if (!isValidUf(billing.state ?? '')) add('state', 'UF inválida')
+  return errors
 }
 
 export const creditsHandlers = [
   http.get('*/api/credits/packages', async () => {
     await delay(150)
-    if (!getSessionUser()) return problem(401, 'NAO_AUTENTICADO', 'Autenticação necessária.')
+    if (!getSessionUser()) return unauthenticated()
     return HttpResponse.json(MOCK_PACKAGES)
+  }),
+
+  http.get('*/api/credits/balance', async () => {
+    await delay(100)
+    const user = getSessionUser()
+    if (!user) return unauthenticated()
+    return HttpResponse.json({ balance: getBalance(user.id) })
   }),
 
   http.post('*/api/credits/purchases', async ({ request }) => {
     await delay()
     const user = getSessionUser()
-    if (!user) return problem(401, 'NAO_AUTENTICADO', 'Autenticação necessária.')
+    if (!user) return unauthenticated()
 
     const idempotencyKey = request.headers.get('Idempotency-Key') ?? ''
-    const repeated = [...payments.values()].find((p) => p.idempotencyKey === idempotencyKey)
-    if (idempotencyKey && repeated) return HttpResponse.json(publicPayment(repeated))
-
-    const body = (await request.json()) as PurchaseRequest
-    const pkg = MOCK_PACKAGES.find((p) => p.id === body.packageId)
-    if (!pkg) {
-      return problem(400, 'DADOS_INVALIDOS', 'Pacote inválido.', [
-        { field: 'packageId', message: 'Escolha um pacote.' },
+    if (!IDEMPOTENCY_KEY.test(idempotencyKey)) {
+      return problem(400, 'DADOS_INVALIDOS', 'Dados inválidos.', [
+        { field: 'idempotencyKey', message: 'cabeçalho Idempotency-Key obrigatório' },
       ])
     }
+    // Como no backend: a mesma chave do mesmo usuário devolve o pedido já criado, com 200.
+    const repeated = [...payments.values()].find(
+      (p) => p.userId === user.id && p.idempotencyKey === idempotencyKey,
+    )
+    if (repeated) return HttpResponse.json(publicPayment(repeated), { status: 200 })
 
-    const id = `pg-${nextPaymentId++}`
-    const createdAt = new Date().toISOString()
+    const body = (await request.json()) as PurchaseRequest
+    const errors = billingErrors(body.billing)
+    if (errors.length > 0) return problem(400, 'DADOS_INVALIDOS', 'Dados inválidos.', errors)
+
+    const pkg = MOCK_PACKAGES.find((p) => p.id === body.packageId)
+    if (!pkg) return problem(422, 'PACOTE_INDISPONIVEL', 'Pacote de créditos indisponível.')
+
+    const id = mockPaymentId(nextPaymentId++)
     const payment: StoredPayment = {
       id,
       userId: user.id,
       idempotencyKey,
       packageId: pkg.id,
+      packageName: pkg.name,
       method: body.method,
-      status: 'PENDING',
+      status: 'PENDENTE',
       amount: pkg.price,
       credits: pkg.credits,
-      createdAt,
+      createdAt: new Date().toISOString(),
     }
     if (body.method === 'PIX') {
       payment.pix = {
-        qrCodeImage: fakeQrCode(id + createdAt),
-        copyPaste: `00020126580014BR.GOV.BCB.PIX0136veridt-mock-${id}5204000053039865406${pkg.price.toFixed(2)}5802BR5906VERIDT6006SALVADOR62070503***6304ABCD`,
+        qrCodeImage: PLACEHOLDER_QR_CODE,
+        copyPaste: `PIX-FICTICIO-VERIDT-${id}-${pkg.price.toFixed(2)}`,
         expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
       }
     } else {
-      // No real, o backend devolve o `init_point` do Checkout Pro do Mercado Pago.
-      // Aqui simulamos o retorno direto para a página de status.
-      payment.checkoutUrl = `/creditos/pagamento/${id}`
+      // Como o provedor falso do backend: o "checkout" é a própria página de status do front.
+      payment.checkoutUrl = `${window.location.origin}/creditos/pagamento/${id}`
     }
     payments.set(id, payment)
     return HttpResponse.json(publicPayment(payment), { status: 201 })
   }),
 
+  http.get('*/api/credits/payments', async ({ request }) => {
+    await delay(150)
+    const user = getSessionUser()
+    if (!user) return unauthenticated()
+    const url = new URL(request.url)
+    const page = Number(url.searchParams.get('page') ?? 0)
+    const size = Math.min(Number(url.searchParams.get('size') ?? 20), 50)
+    const mine = [...payments.values()]
+      .filter((p) => p.userId === user.id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    const body: PaymentPage = {
+      items: mine.slice(page * size, page * size + size).map(publicPayment),
+      page,
+      size,
+      totalElements: mine.length,
+      totalPages: Math.ceil(mine.length / size),
+    }
+    return HttpResponse.json(body)
+  }),
+
   http.get('*/api/credits/payments/:id', async ({ params }) => {
     await delay(150)
     const user = getSessionUser()
-    if (!user) return problem(401, 'NAO_AUTENTICADO', 'Autenticação necessária.')
+    if (!user) return unauthenticated()
     const payment = payments.get(String(params.id))
-    if (!payment || payment.userId !== user.id) {
-      return problem(404, 'NAO_ENCONTRADO', 'Pagamento não encontrado.')
-    }
-    settle(payment)
+    // Pedido de outro usuário: a mesma resposta de um ID inexistente.
+    if (!payment || payment.userId !== user.id) return notFound()
+    return HttpResponse.json(publicPayment(payment))
+  }),
+
+  http.post('*/api/credits/payments/:id/simulation', async ({ params, request }) => {
+    await delay(150)
+    const user = getSessionUser()
+    if (!user) return unauthenticated()
+    const payment = payments.get(String(params.id))
+    if (!payment || payment.userId !== user.id) return notFound()
+    const { approved } = (await request.json()) as PaymentSimulationRequest
+    decideMockPayment(payment.id, approved)
     return HttpResponse.json(publicPayment(payment))
   }),
 ]

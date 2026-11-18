@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test'
 
-// Roda com VITE_ENABLE_MOCKS=true: o MSW aprova o Pix sozinho após alguns segundos.
+// Roda com VITE_ENABLE_MOCKS=true e VITE_ENABLE_PAYMENT_SIMULATION=true (ver
+// e2e/playwright.config.ts). Como no backend sem provedor, o Pix fica pendente até a simulação.
 const DEMO = { email: 'demo@veridt.test', password: 'senha-demo-123' }
 
-test('comprar créditos com Pix atualiza o saldo', async ({ page }) => {
+test('comprar créditos com Pix e simular a aprovação atualiza o saldo', async ({ page }) => {
   await page.goto('/login?redirect=%2Fcreditos')
   await page.getByLabel('E-mail').fill(DEMO.email)
   await page.getByLabel('Senha', { exact: true }).fill(DEMO.password)
@@ -12,7 +13,7 @@ test('comprar créditos com Pix atualiza o saldo', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Compra de Créditos' })).toBeVisible()
   await expect(page.getByText('Saldo de créditos atual: 10')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Escolher: Pacote Médio' }).click()
+  await page.getByRole('button', { name: 'Escolher: Médio' }).click()
   await page.getByLabel('CPF').pressSequentially('52998224725')
   await page.getByLabel('Telefone').pressSequentially('71998765432')
   await page.getByLabel('CEP').pressSequentially('40170115')
@@ -27,6 +28,10 @@ test('comprar créditos com Pix atualiza o saldo', async ({ page }) => {
 
   const dialog = page.getByRole('dialog', { name: 'PIX Gerado' })
   await expect(dialog.getByRole('img', { name: /QR Code Pix/ })).toBeVisible()
-  await expect(dialog.getByText('Pagamento aprovado')).toBeVisible({ timeout: 20_000 })
-  await expect(page.getByTestId('saldo-creditos')).toHaveText('Créditos: 40')
+  await expect(dialog.getByText('Aguardando pagamento')).toBeVisible()
+
+  await dialog.getByRole('button', { name: 'Simular aprovação' }).click()
+  await expect(dialog.getByText('Pagamento aprovado')).toBeVisible({ timeout: 15_000 })
+  // 10 do usuário de demonstração + 50 do pacote Médio.
+  await expect(page.getByTestId('saldo-creditos')).toHaveText('Créditos: 60')
 })

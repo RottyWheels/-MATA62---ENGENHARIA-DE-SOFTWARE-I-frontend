@@ -42,6 +42,18 @@ describe('http', () => {
     expect(spy).toHaveBeenCalledWith('Acesso negado', expect.anything())
   })
 
+  it('não mostra "Acesso negado" no 403 de e-mail não confirmado (tratado pelo login)', async () => {
+    const spy = vi.spyOn(toast, 'error')
+    server.use(
+      mswHttp.post(url('/auth/login'), () =>
+        HttpResponse.json({ status: 403, code: 'EMAIL_NAO_CONFIRMADO' }, { status: 403 }),
+      ),
+    )
+
+    await expect(http.post('/auth/login', {})).rejects.toThrow()
+    expect(spy).not.toHaveBeenCalled()
+  })
+
   it('monta o redirect com a rota atual', () => {
     expect(buildLoginRedirect({ pathname: '/registros/1', search: '?a=1', hash: '' })).toBe(
       '/login?redirect=%2Fregistros%2F1%3Fa%3D1',

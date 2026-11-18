@@ -1,8 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { Controller, useForm, useWatch, type FieldPath } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router'
-import { toast } from 'sonner'
+import { Link } from 'react-router'
 
 import { applyProblemDetailToForm } from '@/shared/api/problem-detail'
 import { FormError } from '@/shared/components/form/FormError'
@@ -14,6 +13,7 @@ import { CPF_MASK } from '@/shared/lib/validators'
 
 import { useRegister } from '../api/auth'
 import { AuthCard } from '../components/AuthCard'
+import { CheckEmailNotice } from '../components/CheckEmailNotice'
 import { OabRegistrationsField } from '../components/OabRegistrationsField'
 import { authLinkClass } from '../lib/styles'
 import {
@@ -45,9 +45,10 @@ const USER_TYPES = [
 ] as const
 
 export function RegisterPage() {
-  const navigate = useNavigate()
   const register = useRegister()
   const [formError, setFormError] = useState<string | null>(null)
+  /** E-mail da conta criada: a tela passa a pedir a confirmação. */
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null)
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -59,9 +60,10 @@ export function RegisterPage() {
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null)
     try {
-      const user = await register.mutateAsync(toRegisterRequest(values))
-      toast.success('Conta criada', { description: 'Entre com seu e-mail e senha.' })
-      await navigate('/login', { state: { email: user.email } })
+      const request = toRegisterRequest(values)
+      await register.mutateAsync(request)
+      // Sem login automático: o backend só libera o login depois do link do e-mail.
+      setRegisteredEmail(request.email)
     } catch (error) {
       setFormError(
         applyProblemDetailToForm(error, form.setError, {
@@ -75,6 +77,8 @@ export function RegisterPage() {
       )
     }
   })
+
+  if (registeredEmail) return <CheckEmailNotice email={registeredEmail} />
 
   return (
     <AuthCard

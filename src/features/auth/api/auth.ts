@@ -5,10 +5,12 @@ import type { ProblemDetail } from '@/shared/api/problem-detail'
 
 import { AUTH_ENDPOINTS } from './endpoints'
 import type {
+  ConfirmEmailRequest,
   LoginRequest,
   PasswordResetConfirmRequest,
   PasswordResetRequest,
   RegisterRequest,
+  ResendConfirmationRequest,
   User,
 } from './types'
 
@@ -49,6 +51,22 @@ export const postPasswordReset = (body: PasswordResetRequest) =>
 
 export const postPasswordResetConfirm = (body: PasswordResetConfirmRequest) =>
   customInstance<void>({ url: AUTH_ENDPOINTS.passwordResetConfirm, method: 'POST', data: body })
+
+/**
+ * 204 confirma; 422 `TOKEN_INVALIDO` (inexistente, expirado ou usado). Sem os toasts globais:
+ * a página `/confirmar-email` mostra todos os estados, inclusive erro de rede e 5xx.
+ */
+export const postConfirmEmail = (body: ConfirmEmailRequest) =>
+  customInstance<void>({
+    url: AUTH_ENDPOINTS.emailConfirmationConfirm,
+    method: 'POST',
+    data: body,
+    skipGlobalErrorHandler: true,
+  })
+
+/** Sempre 202: a resposta não revela se o e-mail tem conta pendente. */
+export const postResendConfirmation = (body: ResendConfirmationRequest) =>
+  customInstance<void>({ url: AUTH_ENDPOINTS.emailConfirmationResend, method: 'POST', data: body })
 
 export const getMeQueryKey = () => ['me'] as const
 
@@ -102,5 +120,15 @@ export function usePasswordReset() {
 export function usePasswordResetConfirm() {
   return useMutation<void, AuthError, PasswordResetConfirmRequest>({
     mutationFn: postPasswordResetConfirm,
+  })
+}
+
+export function useConfirmEmail() {
+  return useMutation<void, AuthError, ConfirmEmailRequest>({ mutationFn: postConfirmEmail })
+}
+
+export function useResendConfirmation() {
+  return useMutation<void, AuthError, ResendConfirmationRequest>({
+    mutationFn: postResendConfirmation,
   })
 }

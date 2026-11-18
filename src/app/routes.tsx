@@ -46,7 +46,7 @@ export const routes: RouteObject[] = [
         ],
       },
       {
-        // Fora do <RedirectIfAuthenticated>: o link do e-mail funciona mesmo com sessão aberta.
+        // Fora do <RedirectIfAuthenticated>: os links do e-mail funcionam mesmo com sessão aberta.
         lazy: async () => ({
           Component: (await import('./layouts/PublicLayout')).PublicLayout,
         }),
@@ -55,6 +55,13 @@ export const routes: RouteObject[] = [
             path: 'redefinir-senha',
             lazy: async () => ({
               Component: (await import('@/features/auth/pages/NewPasswordPage')).NewPasswordPage,
+            }),
+          },
+          {
+            // Sem loader: a confirmação é um POST feito pela página, nunca no carregamento da rota.
+            path: 'confirmar-email',
+            lazy: async () => ({
+              Component: (await import('@/features/auth/pages/ConfirmEmailPage')).ConfirmEmailPage,
             }),
           },
         ],

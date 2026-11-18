@@ -1,4 +1,4 @@
-import { DEMO_USER } from '@/mocks/handlers/auth'
+import { confirmMockEmail, DEMO_USER } from '@/mocks/handlers/auth'
 import { http } from '@/shared/api/http'
 
 /** Abre a sessão simulada do usuário de demonstração (mocks MSW). */
@@ -6,7 +6,7 @@ export async function loginAsDemo() {
   await http.post('/auth/login', { email: DEMO_USER.email, password: DEMO_USER.password })
 }
 
-/** Cria uma conta comum (sem créditos nos mocks) e entra com ela. */
+/** Cria uma conta comum (sem créditos nos mocks), confirma o e-mail e entra com ela. */
 export async function loginAsNewUser(email: string) {
   const password = 'Senha#Forte1'
   await http.post('/auth/register', {
@@ -16,11 +16,12 @@ export async function loginAsNewUser(email: string) {
     password,
     cpf: '11144477735',
   })
+  confirmMockEmail(email)
   await http.post('/auth/login', { email, password })
 }
 
-/** Saldo de créditos da sessão (`GET /api/me`). */
+/** Saldo de créditos da sessão (`GET /api/credits/balance`). */
 export async function sessionBalance() {
-  const { data } = await http.get<{ creditBalance?: number }>('/me')
-  return data.creditBalance
+  const { data } = await http.get<{ balance: number }>('/credits/balance')
+  return data.balance
 }
