@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 
-import { getMeQueryKey } from '@/features/auth'
+import { getBalanceQueryKey } from '@/features/credits'
 import { getRecordsQueryKey } from '@/features/records'
 import { customInstance, type ErrorType } from '@/shared/api/http'
 import type { ProblemDetail } from '@/shared/api/problem-detail'
@@ -84,7 +84,7 @@ export function useFinishCapture() {
     onSuccess: async (_, id) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getCaptureQueryKey(id) }),
-        queryClient.invalidateQueries({ queryKey: getMeQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getBalanceQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getRecordsQueryKey().slice(0, 2) }),
       ])
     },

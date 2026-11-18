@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router'
 
 import { useLogout, useMe } from '@/features/auth'
+import { useBalance } from '@/features/credits'
 import { Logo } from '@/shared/components/Logo'
 import { Button } from '@/shared/components/ui/button'
 import {
@@ -25,6 +26,7 @@ function initial(name: string | undefined) {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const navigate = useNavigate()
   const { data: me } = useMe()
+  const { data: balance } = useBalance()
   const logout = useLogout()
 
   const handleLogout = async () => {
@@ -78,7 +80,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="min-w-0 text-sm leading-tight">
             <p className="truncate font-medium">{me?.fullName}</p>
             <p className="text-xs text-sidebar-foreground/80" data-testid="saldo-creditos">
-              Créditos: {formatCredits(me?.creditBalance)}
+              Créditos: {formatCredits(balance?.balance)}
             </p>
           </div>
         </div>

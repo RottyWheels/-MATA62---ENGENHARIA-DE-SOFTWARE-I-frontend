@@ -9,13 +9,19 @@ import { formatCurrency, formatDateTime, formatNumber } from '@/shared/lib/forma
 
 import { usePayment } from '../api/credits'
 import type { PaymentMethod } from '../api/types'
+import { PaymentSimulation } from '../components/PaymentSimulation'
 import { PaymentStatusBadge } from '../components/PaymentStatusBadge'
 import { PixDetails } from '../components/PixDetails'
+import { isPaymentSimulationEnabled } from '../lib/simulation'
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   PIX: 'Pix',
   MERCADO_PAGO: 'Mercado Pago',
 }
+
+/** Rótulo da forma de pagamento; um valor novo do backend aparece como veio. */
+const methodLabel = (method: string) =>
+  Object.hasOwn(METHOD_LABEL, method) ? METHOD_LABEL[method as PaymentMethod] : method
 
 /**
  * Status do pagamento (REQ 06–07). Destino do retorno do Mercado Pago e
@@ -54,20 +60,33 @@ export function PaymentStatusPage() {
             <>
               <PaymentStatusBadge status={payment.status} />
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <dt className="text-muted-foreground">Pacote</dt>
+                <dd>{payment.packageName}</dd>
                 <dt className="text-muted-foreground">Créditos</dt>
                 <dd>{formatNumber(payment.credits)}</dd>
                 <dt className="text-muted-foreground">Valor</dt>
                 <dd>{formatCurrency(payment.amount)}</dd>
                 <dt className="text-muted-foreground">Forma de pagamento</dt>
-                <dd>{METHOD_LABEL[payment.method]}</dd>
+                <dd>{methodLabel(payment.method)}</dd>
                 <dt className="text-muted-foreground">Criado em</dt>
                 <dd>{formatDateTime(payment.createdAt)}</dd>
+                {payment.decidedAt && (
+                  <>
+                    <dt className="text-muted-foreground">
+                      {payment.status === 'RECUSADO' ? 'Recusado em' : 'Aprovado em'}
+                    </dt>
+                    <dd>{formatDateTime(payment.decidedAt)}</dd>
+                  </>
+                )}
               </dl>
 
-              {payment.status === 'PENDING' && payment.pix && (
+              {payment.status === 'PENDENTE' && payment.pix && (
                 <PixDetails payment={payment} pix={payment.pix} />
               )}
-              {payment.status === 'APPROVED' && (
+              {payment.status === 'PENDENTE' &&
+                import.meta.env.DEV &&
+                isPaymentSimulationEnabled() && <PaymentSimulation paymentId={payment.id} />}
+              {payment.status === 'APROVADO' && (
                 <p className="text-sm">
                   Os créditos já foram adicionados ao seu saldo. Você também receberá a confirmação
                   por e-mail.
@@ -77,17 +96,15 @@ export function PaymentStatusPage() {
           )}
 
           <div className="flex flex-wrap gap-2">
-            {payment?.status === 'APPROVED' ? (
+            {payment?.status === 'APROVADO' && (
               <Button asChild>
                 <Link to="/capturas/nova">Novo registro</Link>
               </Button>
-            ) : (
-              payment &&
-              payment.status !== 'PENDING' && (
-                <Button asChild>
-                  <Link to="/creditos">Tentar novamente</Link>
-                </Button>
-              )
+            )}
+            {(payment?.status === 'RECUSADO' || payment?.status === 'EXPIRADO') && (
+              <Button asChild>
+                <Link to="/creditos">Tentar novamente</Link>
+              </Button>
             )}
             <Button asChild variant="outline">
               <Link to="/creditos">Voltar para créditos</Link>

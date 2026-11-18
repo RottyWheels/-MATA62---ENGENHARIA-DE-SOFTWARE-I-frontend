@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useLocation, useNavigate } from 'react-router'
 
-import { useMe } from '@/features/auth'
+import { useBalance } from '@/features/credits'
 import { applyProblemDetailToForm, getProblemDetail } from '@/shared/api/problem-detail'
 import { FormError } from '@/shared/components/form/FormError'
 import { FormTextField } from '@/shared/components/form/FormTextField'
@@ -33,7 +33,7 @@ function readPrefill(state: unknown): Partial<NewCaptureFormValues> {
 export function NewCapturePage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const me = useMe()
+  const balanceQuery = useBalance()
   const price = useCapturePrice()
   const create = useCreateCapture()
   const [formError, setFormError] = useState<string | null>(null)
@@ -47,7 +47,7 @@ export function NewCapturePage() {
   })
 
   const cost = price.data?.creditsPerRecord
-  const balance = me.data?.creditBalance
+  const balance = balanceQuery.data?.balance
   const insufficient =
     rejectedForBalance || (cost !== undefined && balance !== undefined && balance < cost)
 

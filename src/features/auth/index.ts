@@ -4,12 +4,14 @@
 export { getMeQueryKey, refreshCsrf, useLogout, useMe } from './api/auth'
 export { AUTH_ENDPOINTS } from './api/endpoints'
 export type {
+  ConfirmEmailRequest,
   LoginRequest,
   OabRegistration,
   OabRegistrationType,
   PasswordResetConfirmRequest,
   PasswordResetRequest,
   RegisterRequest,
+  ResendConfirmationRequest,
   User,
   UserType,
 } from './api/types'

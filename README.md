@@ -50,21 +50,28 @@ Segue o Figma "Compra Créditos" numa única tela (`PurchasePage`), em vez das t
 1. **Escolha do pacote:** Básico, Médio ou Premium, com preço, créditos, valor por crédito e benefícios (Apêndice A), vindos de `GET /api/credits/packages`.
 2. **Dados de faturamento** (Apêndice A): nome e e-mail vêm da conta (bloqueados, como no Figma); o CPF é digitado, porque o backend não o devolve em `GET /api/me`; telefone, CEP, endereço, número, complemento, bairro, cidade e estado são validados com os validadores de `shared/lib/validators`. Telefone, CPF e CEP vão à API só com dígitos.
 3. **Pagamento:**
-   - **Pix:** `POST /api/credits/purchases` devolve o QR Code e o código "copia e cola", mostrados no modal "PIX Gerado". O app consulta `GET /api/credits/payments/{id}` a cada 3 s até o status sair de `PENDING`; ao aprovar, atualiza o saldo (query `['me']`).
-   - **Mercado Pago:** a resposta traz `checkoutUrl` (o `init_point` do Checkout Pro) e o usuário é levado para lá; o retorno cai em `/creditos/pagamento/{id}`, que acompanha o status.
-4. **Idempotência:** cada tentativa de compra envia um cabeçalho `Idempotency-Key` (UUID). Repetir a mesma requisição não gera um segundo pagamento, como pede a tática de confiabilidade da arquitetura.
+   - **Pix:** `POST /api/credits/purchases` devolve o QR Code e o código "copia e cola", mostrados no modal "PIX Gerado". O app consulta `GET /api/credits/payments/{id}` a cada 3 s enquanto o status for `PENDENTE` (um status desconhecido também continua sendo consultado e aparece como "Pagamento em verificação", sem quebrar a tela); ao ficar `APROVADO`, invalida a query de saldo (`['credits', 'balance']`).
+   - **Mercado Pago:** a resposta traz `checkoutUrl` (o `init_point` do Checkout Pro) e o usuário é levado para lá; o retorno cai em `/creditos/pagamento/{id}`, que acompanha o status. Se o `checkoutUrl` for da mesma origem do app (o provedor falso do backend aponta para a própria página de status), a navegação acontece sem recarregar.
+4. **Idempotência:** cada pedido envia um cabeçalho `Idempotency-Key` (UUID). Repetir o mesmo pedido (ex.: depois de uma falha de rede) reusa a chave e o backend devolve o pedido já criado, com 200 em vez de 201; os dois são sucesso. Como o backend devolve o pedido antigo para a mesma chave mesmo que o corpo mude, um pedido diferente (outro pacote, método ou faturamento) ganha uma chave nova.
+5. **Saldo:** vem de `GET /api/credits/balance` (`{ balance }`), com query própria. `GET /api/me` não traz saldo: o módulo `identity` não depende de `credits`.
+6. **Simular pagamento (só em desenvolvimento):** enquanto não há provedor, o pedido fica `PENDENTE` até ser aprovado ou recusado por `POST /api/credits/payments/{id}/simulation`. Com `VITE_ENABLE_PAYMENT_SIMULATION=true` no `pnpm dev`, o modal do Pix e a página de status mostram "Simular aprovação" e "Simular recusa"; depois disso, o polling vê o novo status e o saldo é atualizado. O backend precisa de `PAYMENT_SIMULATION_ENABLED=true` (já é o padrão do Compose). No build de produção, os botões e a chamada nem entram no bundle (`import.meta.env.DEV` é `false`).
 
-### Contrato provisório de créditos
+### Contrato de créditos (backend, branch `feature/credits`)
 
-| Método | Caminho                      | Corpo                                 | Resposta                            |
-| ------ | ---------------------------- | ------------------------------------- | ----------------------------------- |
-| `GET`  | `/api/credits/packages`      | —                                     | 200 `CreditPackage[]`               |
-| `POST` | `/api/credits/purchases`     | `PurchaseRequest` + `Idempotency-Key` | 201 `Payment` / 400 `ErrorResponse` |
-| `GET`  | `/api/credits/payments/{id}` | —                                     | 200 `Payment` / 404                 |
+| Método | Caminho                                 | Corpo                                 | Resposta                                                                                   |
+| ------ | --------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `GET`  | `/api/credits/packages`                 | —                                     | 200 `CreditPackage[]`                                                                      |
+| `GET`  | `/api/credits/balance`                  | —                                     | 200 `{ balance }`                                                                          |
+| `POST` | `/api/credits/purchases`                | `PurchaseRequest` + `Idempotency-Key` | 201 `Payment` (200 ao repetir a chave) / 400 `DADOS_INVALIDOS` / 422 `PACOTE_INDISPONIVEL` |
+| `GET`  | `/api/credits/payments/{id}`            | —                                     | 200 `Payment` / 404 `PAGAMENTO_NAO_ENCONTRADO`                                             |
+| `GET`  | `/api/credits/payments?page=&size=`     | —                                     | 200 `{ items, page, size, totalElements, totalPages }` (ainda sem tela)                    |
+| `POST` | `/api/credits/payments/{id}/simulation` | `{ approved }`                        | 200 `Payment` (só com `PAYMENT_SIMULATION_ENABLED=true`)                                   |
 
-Os tipos estão em `src/features/credits/api/types.ts`. Erros de campo do faturamento podem vir como `billing.<campo>` (ex.: `billing.cep`) e aparecem no campo correspondente.
+Os tipos estão em `src/features/credits/api/types.ts`. Status do pedido em português: `PENDENTE`, `APROVADO`, `RECUSADO` e `EXPIRADO`. O `Payment` traz `packageName` e, depois da decisão, `decidedAt`; `pix` só vem no Pix e `checkoutUrl` só no Mercado Pago (campos ausentes não vêm no JSON). Os dados de faturamento nunca voltam. Erros de campo do faturamento vêm como `billing.<campo>` (ex.: `billing.cep`) e aparecem no campo correspondente; o 422 `PACOTE_INDISPONIVEL` aparece no seletor de pacotes e recarrega a lista. Pacotes e valores são provisórios no backend.
 
-Nos mocks, o pagamento é aprovado sozinho 6 s depois de criado e os créditos entram no saldo do usuário simulado. O QR Code dos mocks é só ilustrativo, não é um Pix válido.
+Sem provedor de pagamento, o backend devolve um Pix fictício: o QR Code é um PNG transparente de 1×1 pixel e o copia-e-cola começa com `PIX-FICTICIO-VERIDT-`. A tela mostra os dois normalmente, mas não dá para pagar no banco: use "Simular aprovação". Hoje nada no backend muda um pedido para `EXPIRADO`. Os mocks seguem o mesmo comportamento (o pedido fica pendente até a simulação).
+
+Com o `pnpm dev` na porta 5173, defina no `.env` do backend `PAYMENT_FAKE_RETURN_URL=http://localhost:5173/creditos/pagamento`. O padrão (porta 3000) leva o "checkout" do Mercado Pago para o frontend do Docker.
 
 ## Captura (REQ 08 a 11)
 
@@ -133,6 +140,7 @@ cp .env.example .env
 Resumo (detalhes em [Integração com o backend](#integração-com-o-backend)):
 
 1. No repositório do backend, use a branch `feature/identity-me` (ou o `desenv`, quando ela for integrada), crie o `.env` a partir do `.env.example` com `RESET_URL=http://localhost:5173/redefinir-senha` e suba tudo com `docker compose up --build`.
+   Para a confirmação de e-mail, use a branch `feature/email-confirmation` e acrescente `CONFIRMATION_URL=http://localhost:5173/confirmar-email` (na porta 3000, pelo Compose, o padrão já serve).
 2. No `.env` deste repositório, deixe `VITE_ENABLE_MOCKS=false` e rode:
 
 ```bash
@@ -145,11 +153,14 @@ O Vite (porta 5173) faz proxy de `/api`, `/ws` (WebSocket) e `/v3/api-docs` para
 
 No `.env`, defina `VITE_ENABLE_MOCKS=true` e rode `pnpm dev`. O MSW intercepta as chamadas no navegador. Os handlers ficam em `src/mocks/handlers/` e são os mesmos usados pelo Vitest. Os de autenticação imitam o backend real (respostas, códigos de erro e o formato `ErrorResponse`); os de créditos seguem o contrato provisório. Para testar a tela `/redefinir-senha` nos mocks, use `?token=token-de-teste`.
 
-Há um usuário de demonstração já cadastrado (definido em `src/mocks/handlers/auth.ts`):
+Há duas contas já cadastradas (definidas em `src/mocks/handlers/auth.ts`):
 
-| E-mail             | Senha            |
-| ------------------ | ---------------- |
-| `demo@veridt.test` | `senha-demo-123` |
+| E-mail                 | Senha                | Situação                                                           |
+| ---------------------- | -------------------- | ------------------------------------------------------------------ |
+| `demo@veridt.test`     | `senha-demo-123`     | e-mail confirmado, com registros e créditos                        |
+| `pendente@veridt.test` | `senha-pendente-123` | e-mail não confirmado: o login responde 403 `EMAIL_NAO_CONFIRMADO` |
+
+`/confirmar-email?token=token-de-confirmacao` confirma a conta pendente. Contas criadas pelo cadastro também nascem sem confirmação; como não há servidor de e-mail, o mock escreve o link no console do navegador (`[mocks] E-mail de confirmação…`), no papel do Mailpit. Abra-o na mesma aba sem recarregar (recarregar apaga as contas criadas). Cada reenvio gera um link novo e invalida o anterior.
 
 Os dados dos mocks ficam só na memória da página: ao recarregar, os cadastros feitos somem e volta apenas o usuário de demonstração.
 
@@ -173,27 +184,32 @@ No `.env` do backend, defina `POSTGRES_PASSWORD`, `S3_SECRET_KEY` e `RESET_URL=h
 docker compose up --build
 ```
 
-Com o backend em `http://localhost:8080` e `VITE_ENABLE_MOCKS=false`, rode `pnpm dev` aqui e abra `http://localhost:5173`. Os e-mails de recuperação de senha aparecem no Mailpit, em `http://localhost:8025`.
+Com o backend em `http://localhost:8080` e `VITE_ENABLE_MOCKS=false`, rode `pnpm dev` aqui e abra `http://localhost:5173`. Os e-mails de recuperação de senha e de confirmação aparecem no Mailpit, em `http://localhost:8025`.
+
+Para a confirmação de e-mail, use a branch `feature/email-confirmation` do backend (ainda não integrada ao `desenv`) e defina no `.env` dele `CONFIRMATION_URL=http://localhost:5173/confirmar-email`.
 
 ### Contrato de autenticação
 
-| Método | Caminho                            | Corpo                                                              | Resposta                                   |
-| ------ | ---------------------------------- | ------------------------------------------------------------------ | ------------------------------------------ |
-| `GET`  | `/api/auth/csrf`                   | —                                                                  | 204 + cookie `XSRF-TOKEN`                  |
-| `POST` | `/api/auth/register`               | `fullName`, `email`, `password`, `cpf`, `type`, `oabRegistrations` | 201 `UserResponse` / 400 / 409             |
-| `POST` | `/api/auth/login`                  | `email`, `password`                                                | 204 / 401 `CREDENCIAIS_INVALIDAS`          |
-| `POST` | `/api/auth/logout`                 | —                                                                  | 204                                        |
-| `POST` | `/api/auth/password-reset`         | `email`                                                            | 202 (sempre)                               |
-| `POST` | `/api/auth/password-reset/confirm` | `token`, `newPassword`                                             | 204 / 422 `TOKEN_INVALIDO`                 |
-| `GET`  | `/api/me`                          | —                                                                  | 200 `UserResponse` / 401 `NAO_AUTENTICADO` |
+| Método | Caminho                                | Corpo                                                              | Resposta                                                       |
+| ------ | -------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `GET`  | `/api/auth/csrf`                       | —                                                                  | 204 + cookie `XSRF-TOKEN`                                      |
+| `POST` | `/api/auth/register`                   | `fullName`, `email`, `password`, `cpf`, `type`, `oabRegistrations` | 201 `UserResponse` / 400 / 409                                 |
+| `POST` | `/api/auth/login`                      | `email`, `password`                                                | 204 / 401 `CREDENCIAIS_INVALIDAS` / 403 `EMAIL_NAO_CONFIRMADO` |
+| `POST` | `/api/auth/logout`                     | —                                                                  | 204                                                            |
+| `POST` | `/api/auth/password-reset`             | `email`                                                            | 202 (sempre)                                                   |
+| `POST` | `/api/auth/password-reset/confirm`     | `token`, `newPassword`                                             | 204 / 422 `TOKEN_INVALIDO`                                     |
+| `POST` | `/api/auth/email-confirmation/confirm` | `token`                                                            | 204 / 422 `TOKEN_INVALIDO` / 400                               |
+| `POST` | `/api/auth/email-confirmation/resend`  | `email`                                                            | 202 (sempre) / 400                                             |
+| `GET`  | `/api/me`                              | —                                                                  | 200 `UserResponse` / 401 `NAO_AUTENTICADO`                     |
 
 - **`GET /api/me` ainda não está no `desenv`.** Foi escrito na branch `feature/identity-me` do backend (commit local, falta abrir o PR). Sem ele, o app não sabe quem está logado e volta sempre para o login.
+- **Confirmação de e-mail** (branch `feature/email-confirmation`): a conta nasce sem o e-mail confirmado e o login responde 403 `EMAIL_NAO_CONFIRMADO` (só com a senha certa; senha errada continua 401). Por isso o cadastro não entra sozinho: mostra "Confirme seu e-mail", com o endereço, a validade de 24 h e "Reenviar e-mail". O link do e-mail abre `/confirmar-email?token=…`, que faz **um** `POST` ao montar (nunca `GET` nem loader, para antivírus que abrem links não confirmarem a conta), tira o token da URL com `replace` e não o mostra em nenhuma mensagem. O reenvio responde sempre 202 e a tela mostra sempre a mesma mensagem, sem revelar se o e-mail existe; o botão fica 60 s desativado, com contagem regressiva. Redefinir a senha também confirma o e-mail. O interceptor não mostra o toast "Acesso negado" no 403 `EMAIL_NAO_CONFIRMADO` (o de CSRF vem com `ACESSO_NEGADO`). O backend apaga contas não confirmadas depois de 7 dias (`UNCONFIRMED_ACCOUNT_RETENTION`).
 - **Login devolve 204 sem corpo.** Depois dele o app renova o token CSRF (o Spring troca o token ao autenticar) e busca o usuário em `GET /api/me`.
-- **`UserResponse`** traz `id`, `fullName`, `email`, `type`, `oabRegistrations` e `createdAt`. Não traz CPF nem saldo de créditos: a barra lateral mostra "Créditos: —" até o módulo `credits` existir.
+- **`UserResponse`** traz `id`, `fullName`, `email`, `type`, `oabRegistrations` e `createdAt`. Não traz CPF nem saldo de créditos: o saldo vem de `GET /api/credits/balance` (ver [Compra de créditos](#compra-de-créditos-req-0507)).
 - **OAB:** cada linha da lista vira uma inscrição `{ number, state, type }` em `oabRegistrations`. A tela aplica as regras do `OabValidator` do backend: ao menos uma para advogado, no máximo 30, sem repetidas (zeros à esquerda contam como o mesmo número) e só uma principal.
 - **Senha:** de 8 a 128 caracteres, com letra, número e símbolo (`PasswordPolicy` do backend). O cadastro e a redefinição validam a mesma regra antes de enviar.
 - **Erros:** o backend responde com `ErrorResponse` (`{ timestamp, status, code, message, errors[{ field, message }] }`), não com `ProblemDetail`. O `applyProblemDetailToForm` aceita os dois formatos. Erros de uma inscrição (`oabRegistrations[1].number`) vão para a linha certa, pelo `resolveField`, e erros sem `errors[]` (409 `EMAIL_JA_CADASTRADO`, `CPF_JA_CADASTRADO`, `OAB_JA_CADASTRADA`) vão para o campo certo pelo `code`.
-- **Créditos, captura e registros** ainda não existem no backend. Com `VITE_ENABLE_MOCKS=false`, a tela de compra mostra erro ao carregar os pacotes e a lista dos registros mostra "Não foi possível carregar os registros".
+- **Créditos** existem na branch `feature/credits` do backend (ainda não integrada ao `desenv`). **Captura e registros** ainda não existem no backend: com `VITE_ENABLE_MOCKS=false`, a lista dos registros mostra "Não foi possível carregar os registros".
 
 ## Rotas
 
@@ -203,6 +219,7 @@ Com o backend em `http://localhost:8080` e `VITE_ENABLE_MOCKS=false`, rode `pnpm
 | `/cadastro`                        | Cadastro (advogado ou usuário comum)               | pública     | pronta                         |
 | `/recuperar-senha`                 | Solicitar recuperação de senha                     | pública     | pronta                         |
 | `/redefinir-senha?token=`          | Nova senha (link do e-mail do backend)             | pública¹    | pronta                         |
+| `/confirmar-email?token=`          | Confirmação do e-mail (link do e-mail do backend)  | pública¹    | pronta                         |
 | `/`                                | Redireciona para `/registros`                      | autenticada | pronta                         |
 | `/creditos`                        | Compra: pacotes, faturamento e pagamento           | autenticada | pronta (mocks)                 |
 | `/creditos/checkout/:pacoteId`     | A mesma tela, com o pacote já escolhido            | autenticada | pronta (mocks)                 |
@@ -213,7 +230,7 @@ Com o backend em `http://localhost:8080` e `VITE_ENABLE_MOCKS=false`, rode `pnpm
 | `/registros/:id`                   | A lista com o painel de detalhes, relatório e ZIP  | autenticada | pronta (mocks)                 |
 | `*`                                | 404                                                | —           | pronta                         |
 
-- ¹ `/redefinir-senha` abre mesmo com sessão ativa, porque o link chega por e-mail. Redefinir a senha encerra todas as sessões do usuário no backend.
+- ¹ `/redefinir-senha` e `/confirmar-email` abrem mesmo com sessão ativa, porque o link chega por e-mail. Redefinir a senha encerra todas as sessões do usuário no backend.
 - As rotas autenticadas ficam sob o `RequireAuth`, que consulta `GET /api/me`. Sem sessão (401), ele redireciona para `/login?redirect=<rota>`.
 - As rotas públicas ficam sob o `RedirectIfAuthenticated`: quem já está logado vai para `/` (ou para o `?redirect=`, aceito só se for um caminho interno).
 - Layouts e páginas são carregados sob demanda (`lazy`), um chunk por tela.
@@ -221,24 +238,26 @@ Com o backend em `http://localhost:8080` e `VITE_ENABLE_MOCKS=false`, rode `pnpm
 
 ### Variáveis de ambiente
 
-| Variável            | Padrão                  | Descrição                                    |
-| ------------------- | ----------------------- | -------------------------------------------- |
-| `VITE_BACKEND_URL`  | `http://localhost:8080` | Alvo do proxy do Vite em desenvolvimento     |
-| `VITE_ENABLE_MOCKS` | `false`                 | `true` liga o MSW no navegador (só em `dev`) |
+| Variável                         | Padrão                   | Descrição                                                       |
+| -------------------------------- | ------------------------ | --------------------------------------------------------------- |
+| `VITE_BACKEND_URL`               | `http://localhost:8080`  | Alvo do proxy do Vite em desenvolvimento                        |
+| `VITE_ENABLE_MOCKS`              | `false`                  | `true` liga o MSW no navegador (só em `dev`)                    |
+| `VITE_ENABLE_PAYMENT_SIMULATION` | `true` no `.env.example` | `true` mostra "Simular pagamento" (só em `dev`, nunca no build) |
 
 ## Scripts
 
-| Script              | O que faz                                         |
-| ------------------- | ------------------------------------------------- |
-| `pnpm dev`          | Servidor de desenvolvimento                       |
-| `pnpm build`        | `tsc -b && vite build`                            |
-| `pnpm preview`      | Serve o `dist/`                                   |
-| `pnpm lint`         | ESLint                                            |
-| `pnpm format`       | Prettier (escreve) · `pnpm format:check` só checa |
-| `pnpm typecheck`    | Checagem de tipos                                 |
-| `pnpm test`         | Vitest (uma execução) · `pnpm test:watch`         |
-| `pnpm e2e`          | Playwright (sobe o `pnpm dev` com mocks)          |
-| `pnpm api:generate` | Gera o cliente da API com o orval                 |
+| Script              | O que faz                                                          |
+| ------------------- | ------------------------------------------------------------------ |
+| `pnpm dev`          | Servidor de desenvolvimento                                        |
+| `pnpm build`        | `tsc -b && vite build`                                             |
+| `pnpm preview`      | Serve o `dist/`                                                    |
+| `pnpm lint`         | ESLint                                                             |
+| `pnpm format`       | Prettier (escreve) · `pnpm format:check` só checa                  |
+| `pnpm typecheck`    | Checagem de tipos                                                  |
+| `pnpm test`         | Vitest (uma execução) · `pnpm test:watch`                          |
+| `pnpm e2e`          | Playwright (sobe o `pnpm dev` com mocks)                           |
+| `pnpm e2e:real`     | Playwright contra o backend real no Docker (porta 5174, sem mocks) |
+| `pnpm api:generate` | Gera o cliente da API com o orval                                  |
 
 ## Gerar o cliente da API
 
@@ -260,8 +279,10 @@ pnpm exec playwright install chromium   # só na primeira vez
 pnpm e2e
 ```
 
-- **Vitest** (`jsdom`): setup em `src/test/setup.ts` com `@testing-library/jest-dom` e o servidor MSW (`onUnhandledFrame: 'error'`). Cobre os validadores (CPF, CEP, telefone, OAB/UF), a formatação, o `applyProblemDetailToForm`, o interceptor HTTP, o formulário de cadastro (a OAB só aparece e só é exigida para advogado; o formato `número/UF`; várias inscrições com tipo, repetidas, duas principais e remoção; a política de senha; o corpo enviado à API; erros de campo e conflitos 409 do backend), a redefinição de senha pelo link do e-mail, o login (incluindo o bloqueio de _open redirect_), o `RequireAuth`, a captura (contrato contra os mocks, `useCaptureSocket` com o WebSocket simulado, o formulário de Novo Registro com custo, saldo, 402 e erros do backend), os registros (API, lista, filtros, paginação, painel, relatório e download) e a compra de créditos (schema de faturamento, pacote pré-escolhido pela URL, Pix com `Idempotency-Key` e aprovação, Mercado Pago, erros do backend e a tela de status). Como o jsdom não implementa `ResizeObserver` nem as APIs de ponteiro usadas pelo Radix, o setup define stubs mínimos.
-- **Playwright** (sobe o app com `VITE_ENABLE_MOCKS=true`): `e2e/smoke.spec.ts` testa rota protegida sem sessão → login com `redirect`, e cadastrar → entrar → layout autenticado (com o saldo e o storage vazio) → sair; `e2e/credits.spec.ts` compra o Pacote Médio com Pix e confere o saldo atualizado; `e2e/capture.spec.ts` faz um registro do começo ao fim (novo registro → site aberto → captura de tela → gravação → concluir → diálogo → painel do registro → lista) e o caso do site fora do ar (nada cobrado, volta ao formulário preenchido); `e2e/mobile.spec.ts` percorre login, lista, detalhes, novo registro, sessão e compra em 375 px e falha se alguma tela rolar para o lado; `e2e/keyboard.spec.ts` abre o painel de detalhes com Enter e confere que o foco entra no painel e volta para o link ao fechar.
+Para o E2E contra o backend real (cadastro → link de confirmação lido no Mailpit → login → Pix → "Simular aprovação" → status aprovado → saldo sobe → e-mail "Compra de créditos confirmada"), suba o backend da branch `feature/credits` com `docker compose up --build` e rode `pnpm e2e:real`. Ele cria contas e pedidos de verdade no banco de desenvolvimento.
+
+- **Vitest** (`jsdom`): setup em `src/test/setup.ts` com `@testing-library/jest-dom` e o servidor MSW (`onUnhandledFrame: 'error'`). Cobre os validadores (CPF, CEP, telefone, OAB/UF), a formatação, o `applyProblemDetailToForm`, o interceptor HTTP, o formulário de cadastro (a OAB só aparece e só é exigida para advogado; o formato `número/UF`; várias inscrições com tipo, repetidas, duas principais e remoção; a política de senha; o corpo enviado à API; erros de campo e conflitos 409 do backend), a redefinição de senha pelo link do e-mail, a confirmação de e-mail (os estados de `/confirmar-email`, um POST só no StrictMode, o token fora da URL, o 403 no login e o bloqueio de 60 s do reenvio), o login (incluindo o bloqueio de _open redirect_), o `RequireAuth`, a captura (contrato contra os mocks, `useCaptureSocket` com o WebSocket simulado, o formulário de Novo Registro com custo, saldo, 402 e erros do backend), os registros (API, lista, filtros, paginação, painel, relatório e download) e a compra de créditos (schema de faturamento, pacote pré-escolhido pela URL, Pix fictício com `Idempotency-Key` e aprovação, a mesma chave devolvendo o pedido com 200, chave nova quando o pedido muda, Mercado Pago, 400 `billing.*` e 422 `PACOTE_INDISPONIVEL`, o saldo em `/api/credits/balance`, a tela de status com os status em português, um status desconhecido sem quebrar a página e "Simular pagamento" só com a variável ligada). Como o jsdom não implementa `ResizeObserver` nem as APIs de ponteiro usadas pelo Radix, o setup define stubs mínimos.
+- **Playwright** (sobe o app com `VITE_ENABLE_MOCKS=true`): `e2e/smoke.spec.ts` testa rota protegida sem sessão → login com `redirect`, e cadastrar → "Confirme seu e-mail" → abrir o link → entrar → layout autenticado (com o saldo e o storage vazio) → sair; `e2e/credits.spec.ts` compra o pacote Médio com Pix, usa "Simular aprovação" e confere o saldo atualizado; `e2e/capture.spec.ts` faz um registro do começo ao fim (novo registro → site aberto → captura de tela → gravação → concluir → diálogo → painel do registro → lista) e o caso do site fora do ar (nada cobrado, volta ao formulário preenchido); `e2e/mobile.spec.ts` percorre login, lista, detalhes, novo registro, sessão e compra em 375 px e falha se alguma tela rolar para o lado; `e2e/email-confirmation.spec.ts` cobre o 403 no login com o reenvio, o link de confirmação (um POST só) e o link inválido pelo teclado, e confere as telas em 375 px; `e2e/keyboard.spec.ts` abre o painel de detalhes com Enter e confere que o foco entra no painel e volta para o link ao fechar.
 
 ## Docker
 
@@ -417,12 +438,12 @@ Já resolvidas no `desenv`: prefixo `/api`, CSRF para SPA (`csrf.spa()` + `GET /
 4. O cookie `SESSION` com `HttpOnly`, `SameSite=Lax` e `Secure` em produção.
 5. Endpoint WebSocket `/ws/capture/{sessionId}` autenticado pela sessão.
 6. `server.forward-headers-strategy=native` (ou `framework`) no `application.properties`, para o Spring respeitar o `X-Forwarded-Proto`/`X-Forwarded-For` enviados pelo nginx. Sem isso, o cookie `Secure`, os redirects e o IP registrado na trilha de auditoria saem errados atrás do proxy.
-7. **Créditos:** os endpoints e tipos de "Contrato provisório de créditos"; `creditBalance` em `GET /api/me`; o pacote e o valor vêm sempre do backend (o frontend não envia preço); suporte a `Idempotency-Key` em `POST /api/credits/purchases`; integração Pix/Checkout Pro do Mercado Pago com `back_urls` apontando para `/creditos/pagamento/{id}`; webhook do Mercado Pago com assinatura verificada e fora do CSRF.
+7. **Créditos:** integrar a branch `feature/credits` ao `desenv`; provedor real (Pix e Checkout Pro do Mercado Pago, com `back_urls` apontando para `/creditos/pagamento/{id}`); webhook do Mercado Pago com assinatura verificada e fora do CSRF; expiração do Pix (hoje nenhum pedido vira `EXPIRADO`).
 
 ## Próximos passos
 
 - Abrir o PR do `GET /api/me` no backend e, quando houver OpenAPI, trocar `features/auth/api/` pelo cliente gerado pelo orval.
-- Créditos: ligar ao backend real quando os endpoints existirem e, se o time quiser, preencher o endereço pelo CEP (via backend, para não abrir o `connect-src` da CSP).
+- Créditos: tela de histórico de compras com `GET /api/credits/payments` e, se o time quiser, preencher o endereço pelo CEP (via backend, para não abrir o `connect-src` da CSP).
 - Captura (REQ 09–11): a sessão ao vivo na mesma página do formulário, gravação, capturas de tela, conclusão e falha (tasks C3 a C5 do planejamento).
 - Registros: ligar ao backend quando o módulo `records` existir.
 - Conferir os tokens de `src/index.css` com as variáveis do Figma quando houver acesso de edição.

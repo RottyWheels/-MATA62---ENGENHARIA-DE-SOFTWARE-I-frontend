@@ -10,7 +10,7 @@ import type {
 } from '@/features/capture'
 
 import { problem } from '../utils'
-import { getSessionUser, spendCredits } from './auth'
+import { getBalance, getSessionUser, spendCredits } from './auth'
 import { addMockRecord } from './records'
 
 /**
@@ -210,7 +210,7 @@ export const captureHandlers = [
     }
     if (errors.length) return problem(400, 'DADOS_INVALIDOS', 'Dados inválidos.', errors)
 
-    if ((user.creditBalance ?? 0) < MOCK_PRICE.creditsPerRecord) {
+    if (getBalance(user.id) < MOCK_PRICE.creditsPerRecord) {
       return problem(402, 'SALDO_INSUFICIENTE', 'Seu saldo de créditos não cobre este registro.')
     }
 

@@ -1,10 +1,12 @@
 import { delay, http, HttpResponse } from 'msw'
 
 import type {
+  ConfirmEmailRequest,
   LoginRequest,
   PasswordResetConfirmRequest,
   PasswordResetRequest,
   RegisterRequest,
+  ResendConfirmationRequest,
   User,
 } from '@/features/auth'
 import type { ProblemDetail } from '@/shared/api/problem-detail'
@@ -13,12 +15,22 @@ import { problem } from '../utils'
 
 /**
  * Backend de autenticação em memória, imitando o módulo `identity` do backend
- * (respostas, códigos de erro e o formato `ErrorResponse`). O saldo de créditos
- * é a única parte provisória: o backend ainda não tem o módulo `credits`.
+ * (respostas, códigos de erro e o formato `ErrorResponse`). O saldo de créditos fica guardado
+ * aqui por praticidade, mas, como no backend, não sai em `GET /api/me`: vem de
+ * `GET /api/credits/balance` (mock de créditos).
  * O estado some ao recarregar a página — de propósito, nada vai para o storage.
  */
 
-type StoredUser = User & { password: string; cpf: string }
+type StoredUser = User & {
+  password: string
+  cpf: string
+  /** Saldo de créditos: só o mock de créditos o expõe. */
+  balance: number
+  emailConfirmed: boolean
+  /** Último link de confirmação enviado: cada envio invalida o anterior, como no backend. */
+  confirmationToken?: string
+  confirmationSentAt?: number
+}
 
 /** Usuário de demonstração para o modo com mocks (documentado no README). */
 export const DEMO_USER = {
@@ -28,6 +40,18 @@ export const DEMO_USER = {
 
 /** Token aceito por `POST /api/auth/password-reset/confirm` nos mocks. */
 export const MOCK_RESET_TOKEN = 'token-de-teste'
+
+/** Conta de exemplo com o e-mail ainda não confirmado: o login responde 403. */
+export const UNCONFIRMED_USER = {
+  email: 'pendente@veridt.test',
+  password: 'senha-pendente-123',
+} as const
+
+/** Token que confirma a conta `UNCONFIRMED_USER` (`/confirmar-email?token=…`). */
+export const MOCK_CONFIRMATION_TOKEN = 'token-de-confirmacao'
+
+/** Como no backend: um reenvio para a mesma conta antes disso é ignorado (mas responde 202). */
+const RESEND_INTERVAL_MS = 60_000
 
 const db = {
   users: new Map<string, StoredUser>(),
@@ -53,7 +77,22 @@ function seed() {
     type: 'COMUM',
     oabRegistrations: [],
     createdAt: '2026-11-01T12:00:00Z',
-    creditBalance: 10,
+    balance: 10,
+    emailConfirmed: true,
+  })
+  db.users.set(UNCONFIRMED_USER.email, {
+    id: newId(),
+    fullName: 'Conta Pendente',
+    email: UNCONFIRMED_USER.email,
+    password: UNCONFIRMED_USER.password,
+    cpf: '12345678909',
+    type: 'COMUM',
+    oabRegistrations: [],
+    createdAt: '2026-11-15T12:00:00Z',
+    balance: 0,
+    emailConfirmed: false,
+    confirmationToken: MOCK_CONFIRMATION_TOKEN,
+    confirmationSentAt: 0,
   })
 }
 seed()
@@ -63,9 +102,40 @@ export function resetAuthMock() {
   seed()
 }
 
-/** Como o `UserResponse` do backend: sem senha e sem CPF. */
-function toUser({ password: _password, cpf: _cpf, ...user }: StoredUser): User {
+/** Como o `UserResponse` do backend: sem senha, CPF, saldo e dados da confirmação. */
+function toUser({
+  password: _password,
+  cpf: _cpf,
+  balance: _balance,
+  emailConfirmed: _emailConfirmed,
+  confirmationToken: _confirmationToken,
+  confirmationSentAt: _confirmationSentAt,
+  ...user
+}: StoredUser): User {
   return user
+}
+
+/**
+ * "Envia" o e-mail de confirmação: gera um token novo, que invalida o anterior. Sem servidor de
+ * e-mail, o link aparece no console do navegador, no papel do Mailpit (só no `pnpm dev` com mocks).
+ */
+function sendConfirmationEmail(user: StoredUser) {
+  user.confirmationToken = crypto.randomUUID()
+  user.confirmationSentAt = Date.now()
+  if (import.meta.env.DEV && import.meta.env.MODE !== 'test') {
+    console.info(
+      `[mocks] E-mail de confirmação para ${user.email}: /confirmar-email?token=${user.confirmationToken}`,
+    )
+  }
+}
+
+/** Confirma o e-mail de uma conta dos mocks sem passar pelo link (usado pelos testes). */
+export function confirmMockEmail(email: string) {
+  const user = db.users.get(email.trim().toLowerCase())
+  if (user) {
+    user.emailConfirmed = true
+    user.confirmationToken = undefined
+  }
 }
 
 function currentUser() {
@@ -79,17 +149,22 @@ export function getSessionUser(): User | undefined {
   return user ? toUser(user) : undefined
 }
 
+/** Saldo de créditos de um usuário (`GET /api/credits/balance` nos mocks). */
+export function getBalance(userId: string) {
+  return [...db.users.values()].find((u) => u.id === userId)?.balance ?? 0
+}
+
 /** Soma créditos ao saldo de um usuário (confirmação de pagamento simulada). */
 export function addCredits(userId: string, credits: number) {
   const user = [...db.users.values()].find((u) => u.id === userId)
-  if (user) user.creditBalance = (user.creditBalance ?? 0) + credits
+  if (user) user.balance += credits
 }
 
 /** Desconta créditos; `false` se o saldo não cobrir (o saldo não muda). */
 export function spendCredits(userId: string, credits: number) {
   const user = [...db.users.values()].find((u) => u.id === userId)
-  if (!user || (user.creditBalance ?? 0) < credits) return false
-  user.creditBalance = (user.creditBalance ?? 0) - credits
+  if (!user || user.balance < credits) return false
+  user.balance -= credits
   return true
 }
 
@@ -118,6 +193,14 @@ export const authHandlers = [
     const user = db.users.get(email.trim().toLowerCase())
     if (!user || user.password !== password) {
       return problem(401, 'CREDENCIAIS_INVALIDAS', 'E-mail ou senha inválidos.')
+    }
+    // Como no backend: conferido depois da senha, e nenhuma sessão é criada.
+    if (!user.emailConfirmed) {
+      return problem(
+        403,
+        'EMAIL_NAO_CONFIRMADO',
+        'Confirme seu e-mail antes de entrar. Enviamos um link para o endereço cadastrado.',
+      )
     }
     db.currentUserId = user.id
     return new HttpResponse(null, { status: 204 })
@@ -163,9 +246,12 @@ export const authHandlers = [
       type: body.type,
       oabRegistrations: oab,
       createdAt: new Date().toISOString(),
-      creditBalance: 0,
+      balance: 0,
+      // A conta nasce sem o e-mail confirmado: o login só funciona depois do link.
+      emailConfirmed: false,
     }
     db.users.set(email, user)
+    sendConfirmationEmail(user)
     return HttpResponse.json(toUser(user), { status: 201 })
   }),
 
@@ -184,6 +270,41 @@ export const authHandlers = [
       return problem(422, 'TOKEN_INVALIDO', 'Link de redefinição de senha inválido ou expirado.')
     }
     demo.password = newPassword
+    // Como no backend: o link chegou pelo e-mail, então redefinir a senha também confirma o e-mail.
+    demo.emailConfirmed = true
     return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post('*/api/auth/email-confirmation/confirm', async ({ request }) => {
+    await delay()
+    const { token } = (await request.json()) as ConfirmEmailRequest
+    if (!token?.trim()) {
+      return problem(400, 'DADOS_INVALIDOS', 'Dados inválidos.', [
+        { field: 'token', message: 'não deve estar em branco' },
+      ])
+    }
+    // Inexistente, já usado ou substituído por um reenvio: a mesma resposta nos três casos.
+    const user = [...db.users.values()].find((u) => u.confirmationToken === token)
+    if (!user) {
+      return problem(422, 'TOKEN_INVALIDO', 'Link de confirmação de e-mail inválido ou expirado.')
+    }
+    user.emailConfirmed = true
+    user.confirmationToken = undefined
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post('*/api/auth/email-confirmation/resend', async ({ request }) => {
+    await delay()
+    const { email } = (await request.json()) as ResendConfirmationRequest
+    if (!email || !/^[^\s@]+@[^\s@]+$/.test(email.trim())) {
+      return problem(400, 'DADOS_INVALIDOS', 'Dados inválidos.', [
+        { field: 'email', message: 'deve ser um endereço de e-mail bem formado' },
+      ])
+    }
+    const user = db.users.get(email.trim().toLowerCase())
+    const recent = Date.now() - (user?.confirmationSentAt ?? 0) < RESEND_INTERVAL_MS
+    if (user && !user.emailConfirmed && !recent) sendConfirmationEmail(user)
+    // Sempre 202: a resposta não revela se o e-mail tem conta, nem se já foi confirmado.
+    return new HttpResponse(null, { status: 202 })
   }),
 ]

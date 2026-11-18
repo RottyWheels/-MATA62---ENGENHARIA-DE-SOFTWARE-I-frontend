@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 // Roda com VITE_ENABLE_MOCKS=true (ver e2e/playwright.config.ts): o MSW faz o papel do backend.
 
@@ -10,9 +10,35 @@ test('rota protegida sem sessão vai para o login com redirect', async ({ page }
   await expect(page.getByRole('heading', { name: 'Acesse sua conta' })).toBeVisible()
 })
 
-test('cadastrar → logar → ver o layout autenticado → sair', async ({ page }) => {
+/**
+ * Guarda os links de confirmação que os mocks "enviam": sem servidor de e-mail, o mock do
+ * cadastro imprime o link no console do navegador, no papel do Mailpit.
+ */
+function captureConfirmationLinks(page: Page) {
+  const links: string[] = []
+  page.on('console', (message) => {
+    const match = /\/confirmar-email\?token=[\w-]+/.exec(message.text())
+    if (match) links.push(match[0])
+  })
+  return links
+}
+
+/**
+ * Abre um caminho dentro do app sem recarregar a página (recarregar apaga o estado dos mocks),
+ * como se o link do e-mail fosse aberto na mesma aba.
+ */
+async function openInApp(page: Page, path: string) {
+  await page.evaluate(
+    `history.pushState(null, '', ${JSON.stringify(path)}); dispatchEvent(new PopStateEvent('popstate'))`,
+  )
+}
+
+test('cadastrar → confirmar o e-mail → logar → ver o layout autenticado → sair', async ({
+  page,
+}) => {
   const email = `e2e-${Date.now()}@veridt.test`
   const password = 'senha-e2e-123'
+  const links = captureConfirmationLinks(page)
 
   // Cadastro (usuário comum)
   await page.goto('/cadastro')
@@ -24,9 +50,24 @@ test('cadastrar → logar → ver o layout autenticado → sair', async ({ page 
   await page.getByLabel('Confirmar senha').fill(password)
   await page.getByRole('button', { name: 'Criar conta' }).click()
 
-  // Login (e-mail já preenchido após o cadastro)
+  // Sem login automático: a tela pede a confirmação do e-mail
+  await expect(page.getByRole('heading', { name: 'Confirme seu e-mail' })).toBeVisible()
+  const notice = page.getByRole('status').filter({ hasText: 'Falta confirmar o e-mail' })
+  await expect(notice).toContainText(email)
+  await expect(notice).toContainText('24 horas')
+  await expect(notice).toBeFocused()
+
+  // Abre o link "recebido" por e-mail
+  await expect.poll(() => links.length).toBe(1)
+  await openInApp(page, links[0] ?? '')
+  await expect(page.getByText('E-mail confirmado')).toBeVisible()
+  // O token sai da URL e do histórico.
+  await expect(page).toHaveURL(/\/confirmar-email$/)
+
+  // Login
+  await page.getByRole('link', { name: 'Ir para o login' }).click()
   await expect(page).toHaveURL(/\/login$/)
-  await expect(page.getByLabel('E-mail')).toHaveValue(email)
+  await page.getByLabel('E-mail').fill(email)
   await page.getByLabel('Senha', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Entrar' }).click()
 

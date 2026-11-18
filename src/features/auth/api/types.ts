@@ -23,11 +23,6 @@ export type User = {
   type: UserType
   oabRegistrations: OabRegistration[]
   createdAt: string
-  /**
-   * Saldo de créditos. PROVISÓRIO: o módulo `credits` do backend ainda não existe,
-   * então `GET /api/me` não traz este campo (só os mocks).
-   */
-  creditBalance?: number
 }
 
 export type LoginRequest = {
@@ -54,4 +49,13 @@ export type PasswordResetConfirmRequest = {
   /** Token recebido no link do e-mail (`?token=`). */
   token: string
   newPassword: string
+}
+
+export type ConfirmEmailRequest = {
+  /** Token recebido no link do e-mail (`/confirmar-email?token=`). Nunca vai para logs. */
+  token: string
+}
+
+export type ResendConfirmationRequest = {
+  email: string
 }

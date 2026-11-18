@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { useNavigate, useParams } from 'react-router'
 
 import { useMe } from '@/features/auth'
-import { applyProblemDetailToForm } from '@/shared/api/problem-detail'
+import { applyProblemDetailToForm, getProblemDetail } from '@/shared/api/problem-detail'
 import { FormError } from '@/shared/components/form/FormError'
 import { FormTextField } from '@/shared/components/form/FormTextField'
 import { PageHeader } from '@/shared/components/page/PageHeader'
@@ -20,8 +21,8 @@ import {
 import { formatCredits } from '@/shared/lib/format'
 import { CEP_MASK, CPF_MASK, PHONE_MASKS, UFS } from '@/shared/lib/validators'
 
-import { usePackages, usePurchase } from '../api/credits'
-import type { CreditPackageId, Payment, PaymentMethod } from '../api/types'
+import { getPackagesQueryKey, useBalance, usePackages, usePurchase } from '../api/credits'
+import type { CreditPackageId, Payment, PaymentMethod, PurchaseRequest } from '../api/types'
 import { PackageCards } from '../components/PackageCards'
 import { PixDialog } from '../components/PixDialog'
 import {
@@ -52,13 +53,22 @@ export function PurchasePage() {
   const { pacoteId } = useParams()
   const initialPackage = PACKAGE_IDS.find((id) => id === pacoteId?.toUpperCase())
   const { data: me } = useMe()
+  const balance = useBalance()
+  const queryClient = useQueryClient()
   const packages = usePackages()
   const purchase = usePurchase()
   const [formError, setFormError] = useState<string | null>(null)
   const [pixPayment, setPixPayment] = useState<Payment | null>(null)
   const [pendingMethod, setPendingMethod] = useState<PaymentMethod | null>(null)
-  // Uma chave por tentativa de compra: repetir o envio não duplica o pagamento.
-  const idempotencyKey = useRef(crypto.randomUUID())
+  // Uma chave por pedido: repetir o mesmo envio (ex.: depois de uma falha de rede) não duplica
+  // o pagamento. O backend devolve o pedido antigo para a mesma chave mesmo que o corpo mude,
+  // então um pedido diferente (outro pacote, método ou faturamento) ganha uma chave nova.
+  const attempt = useRef<{ key: string; body: string } | null>(null)
+  const keyFor = (request: PurchaseRequest) => {
+    const body = JSON.stringify(request)
+    if (attempt.current?.body !== body) attempt.current = { key: crypto.randomUUID(), body }
+    return attempt.current.key
+  }
 
   const form = useForm<PurchaseFormValues>({
     resolver: zodResolver(purchaseSchema),
@@ -78,22 +88,30 @@ export function PurchasePage() {
       setFormError(null)
       setPendingMethod(method)
       try {
-        const payment = await purchase.mutateAsync({
-          body: toPurchaseRequest(purchaseSchema.parse(values), method),
-          idempotencyKey: idempotencyKey.current,
-        })
-        idempotencyKey.current = crypto.randomUUID()
+        const body = toPurchaseRequest(purchaseSchema.parse(values), method)
+        // 201 (pedido novo) e 200 (mesma chave, mesmo pedido) são sucesso.
+        const payment = await purchase.mutateAsync({ body, idempotencyKey: keyFor(body) })
+        attempt.current = null
         if (method === 'PIX') {
           setPixPayment(payment)
-        } else if (payment.checkoutUrl?.startsWith('/')) {
-          await navigate(payment.checkoutUrl)
         } else if (payment.checkoutUrl) {
-          // Checkout Pro do Mercado Pago (site externo); volta para /creditos/pagamento/:id.
-          window.location.assign(payment.checkoutUrl)
+          const checkout = new URL(payment.checkoutUrl, window.location.origin)
+          if (checkout.origin === window.location.origin) {
+            // Sem provedor, o backend aponta para a própria página de status: navega sem recarregar.
+            await navigate(`${checkout.pathname}${checkout.search}${checkout.hash}`)
+          } else {
+            // Checkout Pro do Mercado Pago (site externo); volta para /creditos/pagamento/:id.
+            window.location.assign(checkout.href)
+          }
         }
       } catch (error) {
+        // 422: o pacote foi desativado ou não existe mais. Recarrega a lista de pacotes.
+        if (getProblemDetail(error)?.code === 'PACOTE_INDISPONIVEL') {
+          void queryClient.invalidateQueries({ queryKey: getPackagesQueryKey() })
+        }
         setFormError(
           applyProblemDetailToForm(error, form.setError, {
+            codeMap: { PACOTE_INDISPONIVEL: 'packageId' },
             fieldMap: {
               'billing.fullName': 'fullName',
               'billing.email': 'email',
@@ -120,7 +138,7 @@ export function PurchasePage() {
     <>
       <PageHeader
         title="Compra de Créditos"
-        description={`Saldo de créditos atual: ${formatCredits(me?.creditBalance)}`}
+        description={`Saldo de créditos atual: ${formatCredits(balance.data?.balance)}`}
       />
 
       <form noValidate onSubmit={(event) => event.preventDefault()} className="space-y-8">

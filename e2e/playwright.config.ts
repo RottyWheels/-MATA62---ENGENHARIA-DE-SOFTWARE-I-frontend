@@ -10,6 +10,8 @@ const baseURL = `http://localhost:${PORT}`
 
 export default defineConfig({
   testDir: '.',
+  // Os testes contra o backend real têm config própria (playwright.real.config.ts).
+  testIgnore: 'real-backend/**',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -25,7 +27,7 @@ export default defineConfig({
     cwd: repoRoot,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
-    env: { VITE_ENABLE_MOCKS: 'true' },
+    env: { VITE_ENABLE_MOCKS: 'true', VITE_ENABLE_PAYMENT_SIMULATION: 'true' },
     timeout: 120_000,
   },
 })

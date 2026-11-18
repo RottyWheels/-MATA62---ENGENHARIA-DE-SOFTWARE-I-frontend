@@ -55,6 +55,17 @@ export function buildLoginRedirect(location: Pick<Location, 'pathname' | 'search
   return `${LOGIN_PATH}?redirect=${encodeURIComponent(current)}`
 }
 
+/**
+ * 403 de regra de negócio, tratados pela tela, e não o 403 de CSRF/permissão (`ACESSO_NEGADO`).
+ * Ex.: login com a senha certa e o e-mail ainda não confirmado.
+ */
+const HANDLED_FORBIDDEN_CODES = new Set(['EMAIL_NAO_CONFIRMADO'])
+
+function isHandledForbidden(data: unknown) {
+  if (typeof data !== 'object' || data === null || !('code' in data)) return false
+  return typeof data.code === 'string' && HANDLED_FORBIDDEN_CODES.has(data.code)
+}
+
 export function handleHttpError(error: unknown) {
   if (!isAxiosError(error) || error.config?.skipGlobalErrorHandler) return
   if (axios.isCancel(error)) return
@@ -71,6 +82,7 @@ export function handleHttpError(error: unknown) {
   }
 
   if (status === 403) {
+    if (isHandledForbidden(error.response?.data)) return
     toast.error('Acesso negado', {
       id: 'http-403',
       description: 'Você não tem permissão para realizar esta ação.',

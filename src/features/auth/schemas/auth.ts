@@ -52,6 +52,12 @@ export const passwordResetSchema = z.object({ email })
 
 export type PasswordResetFormValues = z.infer<typeof passwordResetSchema>
 
+// ---- Reenviar o link de confirmação de e-mail ----
+
+export const resendConfirmationSchema = z.object({ email })
+
+export type ResendConfirmationFormValues = z.infer<typeof resendConfirmationSchema>
+
 // ---- Redefinir senha (link do e-mail) ----
 
 export const newPasswordSchema = z

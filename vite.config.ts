@@ -25,6 +25,8 @@ export default defineConfig(({ mode }) => {
       include: ['src/**/*.test.{ts,tsx}'],
       css: false,
       restoreMocks: true,
+      // Desfaz os `vi.stubEnv` (ex.: VITE_ENABLE_PAYMENT_SIMULATION) depois de cada teste.
+      unstubEnvs: true,
       // Testes de formulário simulam muita digitação; com todos os arquivos em
       // paralelo, 5 s (o padrão) é pouco. Uma asserção errada continua falhando.
       testTimeout: 15_000,
