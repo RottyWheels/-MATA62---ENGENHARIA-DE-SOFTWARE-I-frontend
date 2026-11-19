@@ -21,7 +21,7 @@ import { problem } from '../utils'
  * O estado some ao recarregar a página — de propósito, nada vai para o storage.
  */
 
-type StoredUser = User & {
+type StoredUser = Omit<User, 'cpfMasked'> & {
   password: string
   cpf: string
   /** Saldo de créditos: só o mock de créditos o expõe. */
@@ -102,17 +102,26 @@ export function resetAuthMock() {
   seed()
 }
 
-/** Como o `UserResponse` do backend: sem senha, CPF, saldo e dados da confirmação. */
+/** `52998224725` → `***.982.247-**`, como o backend. */
+function maskCpf(cpf: string) {
+  const digits = cpf.replace(/\D/g, '')
+  return `***.${digits.slice(3, 6)}.${digits.slice(6, 9)}-**`
+}
+
+/**
+ * Como o `UserResponse` do backend: sem senha, CPF completo, saldo e dados da confirmação.
+ * O CPF só sai mascarado (`cpfMasked`).
+ */
 function toUser({
   password: _password,
-  cpf: _cpf,
+  cpf,
   balance: _balance,
   emailConfirmed: _emailConfirmed,
   confirmationToken: _confirmationToken,
   confirmationSentAt: _confirmationSentAt,
   ...user
 }: StoredUser): User {
-  return user
+  return { ...user, cpfMasked: maskCpf(cpf) }
 }
 
 /**

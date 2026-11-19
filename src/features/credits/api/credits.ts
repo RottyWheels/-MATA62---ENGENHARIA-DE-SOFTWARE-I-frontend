@@ -39,7 +39,7 @@ export const postPurchase = (body: PurchaseRequest, idempotencyKey: string) =>
 export const getPayment = (id: string, signal?: AbortSignal) =>
   customInstance<Payment>({ url: CREDITS_ENDPOINTS.payment(id), method: 'GET', signal })
 
-/** Pedidos do usuário (`size` até 50). Ainda sem tela: pronto para o histórico de compras. */
+/** Pedidos do usuário (`size` até 50), do mais recente para o mais antigo. Histórico do perfil. */
 export const getPayments = (params: { page?: number; size?: number }, signal?: AbortSignal) =>
   customInstance<PaymentPage>({ url: CREDITS_ENDPOINTS.payments, method: 'GET', params, signal })
 
@@ -58,6 +58,8 @@ export const postPaymentSimulation = (id: string, body: PaymentSimulationRequest
 export const getPackagesQueryKey = () => ['credits', 'packages'] as const
 export const getBalanceQueryKey = () => ['credits', 'balance'] as const
 export const getPaymentQueryKey = (id: string) => ['credits', 'payments', id] as const
+export const getPaymentsQueryKey = (params: { page?: number; size?: number }) =>
+  ['credits', 'payments', 'list', params] as const
 
 export function usePackages() {
   return useQuery<CreditPackage[], CreditsError>({
@@ -72,6 +74,14 @@ export function useBalance() {
   return useQuery<Balance, CreditsError>({
     queryKey: getBalanceQueryKey(),
     queryFn: ({ signal }) => getBalance(signal),
+  })
+}
+
+/** Histórico de compras do usuário logado (uma página). */
+export function usePayments(params: { page?: number; size?: number }) {
+  return useQuery<PaymentPage, CreditsError>({
+    queryKey: getPaymentsQueryKey(params),
+    queryFn: ({ signal }) => getPayments(params, signal),
   })
 }
 

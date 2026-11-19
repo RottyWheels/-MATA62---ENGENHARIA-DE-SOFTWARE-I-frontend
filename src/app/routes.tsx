@@ -95,6 +95,12 @@ export const routes: RouteObject[] = [
                 }),
               },
               {
+                path: 'perfil',
+                lazy: async () => ({
+                  Component: (await import('@/features/profile/pages/ProfilePage')).ProfilePage,
+                }),
+              },
+              {
                 path: 'capturas/nova',
                 lazy: async () => ({
                   Component: (await import('@/features/capture/pages/NewCapturePage'))

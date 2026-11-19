@@ -15,13 +15,15 @@ export type OabRegistration = {
   type: OabRegistrationType
 }
 
-/** `UserResponse` do backend. Nunca traz senha nem CPF. */
+/** `UserResponse` do backend. Nunca traz senha nem o CPF completo. */
 export type User = {
   id: string
   fullName: string
   email: string
   type: UserType
   oabRegistrations: OabRegistration[]
+  /** CPF já mascarado no servidor, ex.: `***.456.789-**`. */
+  cpfMasked: string
   createdAt: string
 }
 

@@ -1,7 +1,7 @@
 // API pública da feature de créditos (módulo `credits` do backend, REQ 05–07).
 // As páginas não são exportadas aqui: o router as carrega sob demanda (lazy).
 
-export { getBalanceQueryKey, useBalance } from './api/credits'
+export { getBalanceQueryKey, useBalance, usePayments } from './api/credits'
 export type {
   Balance,
   BillingInfo,

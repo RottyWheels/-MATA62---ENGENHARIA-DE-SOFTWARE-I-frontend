@@ -5,4 +5,5 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/capturas/nova', label: 'Novo Registro' },
   { to: '/registros', label: 'Lista dos Registros' },
   { to: '/creditos', label: 'Comprar Créditos' },
+  { to: '/perfil', label: 'Meu Perfil' },
 ]
